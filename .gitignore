@@ -1,0 +1,80 @@
+# Ignore build artifacts
+/build/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.out
+*.i
+*.s
+*.ii
+*.d
+
+# Ignore intermediate and log files
+*.log
+*.pid
+*.stackdump
+*.pch
+
+# Ignore temporary files created by editors and IDEs
+*~
+*.swp
+*.tmp
+*.bak
+
+# Ignore Visual Studio specific files
+.vscode/
+.vs/
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+
+# Visual Studio Code workspace and config files
+.vscode/*.code-workspace
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+
+# Visual Studio build files
+*.pdb
+*.ipch
+*.opendb
+*.VC.db
+*.VC.opendb
+*.idb
+*.ilk
+*.tlog
+*.lastbuildstate
+
+# Ignore build log files
+BuildLog.htm
+*.log
+*.wrn
+*.err
+
+# Ignore user-specific files
+*.suo
+*.user
+*.userosscache
+*.userprefs
+*.ncb
+*.sdf
+
+# Ignore debugging files
+*.pdb
+*.obj
+*.o
+*.tlog
+*.lastbuildstate
+
+# Ignore output directories
+ipch/
+obj/
+bin/
+Debug/
+Release/
