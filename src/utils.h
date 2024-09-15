@@ -2,11 +2,12 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+
 #include <math.h>
 #include <ctype.h>
 #include <time.h>

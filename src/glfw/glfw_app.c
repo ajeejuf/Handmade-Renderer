@@ -9,7 +9,7 @@ init_glfw_app(glfw_app_t *app, const char **app_func_names, u32 func_count,
     {
         init_loaded_code(&app->code, (void **)&app->funcs,
                          app_func_names, func_count,
-                         build_dir, name, "dll");
+                         build_dir, name, "dll", 1);
         load_code(&app->code);
         ASSERT_LOG(app->code.is_valid, "Error: Failed to load %s.dll", name);
     }
@@ -18,6 +18,12 @@ init_glfw_app(glfw_app_t *app, const char **app_func_names, u32 func_count,
     {
         app->window = glfwCreateWindow(800, 600, name, NULL, NULL);
         ASSERT_LOG(app->window, "Error: Failed to create glfw window for %s", name);
+    }
+    
+    // NOTE(ajeej): Initialize GLEW functions
+    {
+        glfwMakeContextCurrent(app->window);
+        glewInit();
     }
     
     // TODO(ajeej): Move somewhere so doesn't have to be rewritten

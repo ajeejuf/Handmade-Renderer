@@ -1,4 +1,5 @@
 @echo off
+setlocal
 
 set application_name=handmade_renderer
 set build_options=

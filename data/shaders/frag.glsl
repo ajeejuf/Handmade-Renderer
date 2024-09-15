@@ -1,5 +1,7 @@
-#version 300 es
-precision mediump float;
+//#version 300 es
+//precision mediump float;
+
+#version 330
 
 struct dir_light_t {
     vec3 dir;
@@ -45,5 +47,5 @@ void main() {
     vec3 norm = normalize(out_norm);
     vec3 view_dir = normalize(view_pos - frag_pos);
     
-    frag_color = vec4(material.ambient, 1.0);
+    frag_color = vec4(1.0, 0.0f, 0.0, 1.0);//vec4(material.ambient, 1.0);
 }

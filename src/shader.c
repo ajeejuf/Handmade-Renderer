@@ -60,7 +60,8 @@ compile_shader(const char *src, u32 type)
 internal u32
 compile_shader_from_file(const char *file, u32 type)
 {
-    char path[MAX_PATH] = "./data/shaders/";
+    // TODO(ajeej): need to change this depending if usingn emscripten or windows
+    char path[MAX_PATH] = "../data/shaders/";
     strcat(path, file);
     
     const char *src = read_file(path, NULL);

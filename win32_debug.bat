@@ -1,3 +1,3 @@
 @echo off
 
-devenv build\handmade_pixel.exe
+devenv build\handmade_renderer.exe

@@ -129,8 +129,8 @@ typedef struct camera_t {
     f32 orth_interp;
     f32 fov;
     f32 aspect_ratio;
-    f32 near;
-    f32 far;
+    f32 n;
+    f32 f;
     
     mat4 pers;
     mat4 orth;

@@ -16,13 +16,13 @@ update_camera(camera_t *cam, u32 update_flag)
     if (update_flag & CAMERA_UPDATE_PROJECTION)
     {
         cam->pers = HMM_Perspective_RH_NO(HMM_ToRad(cam->fov), cam->aspect_ratio,
-                                          cam->near, cam->far);
+                                          cam->n, cam->f);
         
-        f32 interp_near = cam->near+(cam->far-cam->near)*cam->orth_interp;
+        f32 interp_near = cam->n+(cam->f-cam->n)*cam->orth_interp;
         f32 h = 2.0f*tan(cam->fov/2.0f) * interp_near;
         f32 w = h * cam->aspect_ratio;
         f32 l = -w/2.0f, b = -h/2.0f;
-        cam->orth = HMM_Orthographic_RH_NO(l, -l, b, -b, cam->near, cam->far);
+        cam->orth = HMM_Orthographic_RH_NO(l, -l, b, -b, cam->n, cam->f);
     }
     
     if (update_flag & CAMERA_UPDATE_ORIENTATION)
@@ -43,7 +43,7 @@ update_camera(camera_t *cam, u32 update_flag)
 internal void
 init_camera(camera_t *cam, v3 pos, f32 speed, f32 sens,
             f32 aspect_ratio, f32 orth_interp,
-            f32 fov, f32 near, f32 far)
+            f32 fov, f32 near_plane, f32 far_plane)
 {
     cam->pos = pos;
     cam->world_up = HMM_V3(0.0f, 1.0f, 0.0f);
@@ -60,8 +60,8 @@ init_camera(camera_t *cam, v3 pos, f32 speed, f32 sens,
     cam->orth_interp = orth_interp;
     cam->fov = fov;
     cam->aspect_ratio = aspect_ratio;
-    cam->near = near;
-    cam->far = far;
+    cam->n = near_plane;
+    cam->f = far_plane;
     
     update_camera(cam, CAMERA_UPDATE_ALL);
 }

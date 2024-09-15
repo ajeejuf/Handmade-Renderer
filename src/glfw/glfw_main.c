@@ -1,20 +1,22 @@
 
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "windows.h"
 
-typedef HMODULE dll_t;
-#define load_library(hnd) LoadLibrary(hnd)
+#define load_library(hnd) LoadLibraryA(hnd)
 #define unload_library(hnd) FreeLibrary(hnd)
 #define load_func(hnd,fn) GetProcAddress(hnd, fn)
+#define get_working_directory(p, s) GetCurrentDirectory(s, p);
 
 #else
+#include <unistd.h>
 #include <dlfcn.h>
 
-typedef void* dll_t;
 #define load_library(hnd) dlopen(hnd, RTLD_LAZY)
 #define unload_library(hnd) dlclose(hnd)
 #define load_func(hnd,fn) dlsym(hnd, fn)
+#define get_working_directory(p, s) getcwd(p, s)
 
 #endif
 
@@ -44,8 +46,10 @@ int main(int argc, char **argv)
 {
     ASSERT_LOG(argc > 1, "Error: No apps");
     
+    char build_dir[MAX_PATH];
+    get_working_directory(build_dir, MAX_PATH);
+    
     u32 app_count = argc-1;
-    char *build_dir = get_build_dir(argv[0]);
     
     if (!glfwInit())
     {
@@ -84,6 +88,22 @@ int main(int argc, char **argv)
         update_renderer(&plat_app->rb);
         
         free((void *)name);
+    }
+    
+    glfw_app_t *cur_app = app;
+    plat_app = &cur_app->plat_app;
+    while(!glfwWindowShouldClose(cur_app->window))
+    {
+        glfwMakeContextCurrent(cur_app->window);
+        
+        start_frame(&plat_app->rb);
+        
+        cur_app->funcs.update_and_render(plat_app);
+        
+        end_frame(&plat_app->rb);
+        
+        glfwSwapBuffers(cur_app->window);
+        glfwPollEvents();
     }
     
     

@@ -4,7 +4,7 @@ internal void
 init_loaded_code(loaded_code_t *code, void **func_table,
                  const char **func_names, u32 func_count,
                  const char *build_dir, const char *dll_name,
-                 const char *ext)
+                 const char *ext, u32 is_back_slash)
 {
     memset(code, 0, sizeof(*code));
     
@@ -12,6 +12,11 @@ init_loaded_code(loaded_code_t *code, void **func_table,
     strcpy(code->dll_name, dll_name);
     cstr_cat_many(code->temp_dll_name, dll_name, "_temp");
     strcpy(code->ext, ext);
+    
+    if (is_back_slash)
+        strcpy(code->slash, "\\");
+    else
+        strcpy(code->slash, "/");
     
     code->func_count = func_count;
     code->func_names = func_names;
@@ -37,7 +42,7 @@ load_code(loaded_code_t *code)
     dll_path[0] = 0;
     
     cstr_cat_many(dll_path, code->build_dir,
-                  "/", code->dll_name, ".", code->ext);
+                  code->slash, code->dll_name, ".", code->ext);
     LOG("DLL_PATH: %s", dll_path);
     
     for (u32 attempt = 0; attempt < 128; attempt++)
@@ -46,7 +51,7 @@ load_code(loaded_code_t *code)
         sprintf(number, "%d", code->temp_dll_num);
         
         cstr_cat_many(temp_dll_path, code->build_dir,
-                      "/", code->temp_dll_name, number,
+                      code->slash, code->temp_dll_name, number,
                       ".", code->ext);
         LOG("TEMP_DLL_PATH: %s", temp_dll_path);
         
