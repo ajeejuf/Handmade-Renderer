@@ -133,7 +133,7 @@ update_renderer(renderer_t *rb)
                     glEnableVertexAttribArray(loc+k);
                     glVertexAttribPointer(loc+k, info->count, info->type,
                                           info->normalize, attrib->size,
-                                          (void *)&info->offset);
+                                          (void *)(info->offset*sizeof(u8)));
                     
                     glVertexAttribDivisor(loc+k, 1);
                 }
@@ -272,8 +272,11 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         set_uniform(shader, SHADER_LOC_MATRIX_MODEL, trans);
         set_material(rb, shader, cmd->mat_id);
         
+        //glDrawArrays(GL_TRIANGLES, 0, 3);
+        
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vas->ebo);
         glDrawElements(m_info->prim_type, m_info->indices_count,
-                       GL_UNSIGNED_INT, (void *)&m_info->indices_idx);
+                       GL_UNSIGNED_INT, (void *)(m_info->indices_idx*sizeof(u32)));
     }
     
     glBindVertexArray(0);

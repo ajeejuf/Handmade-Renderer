@@ -1,4 +1,9 @@
 
+void framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
+{
+    glViewport(0, 0, width, height);
+}
+
 internal void
 init_glfw_app(glfw_app_t *app, const char **app_func_names, u32 func_count,
               const char *build_dir, const char *name)
@@ -39,7 +44,7 @@ init_glfw_app(glfw_app_t *app, const char **app_func_names, u32 func_count,
     
     // TODO(ajeej): set callbacks
     {
-        
+        glfwSetFramebufferSizeCallback(app->window, framebuffer_size_callback);
     }
 }
 

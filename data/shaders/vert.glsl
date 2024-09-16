@@ -1,7 +1,5 @@
-//#version 300 es
-//precision mediump float;
-
-#version 330
+#version 300 es
+precision mediump float;
 
 layout (location = 0) in vec3 pos;
 layout (location = 1) in vec3 norm;
@@ -22,5 +20,5 @@ void main() {
     out_norm = norm;
     out_color = color;
     
-    gl_Position = vec4(pos, 1.0);//proj*view*vec4(frag_pos, 1.0);
+    gl_Position = proj*view*vec4(frag_pos, 1.0);
 }
