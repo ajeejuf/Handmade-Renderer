@@ -17,7 +17,7 @@ out vec4 out_color;
 void main() {
     
     frag_pos = vec3(model * vec4(pos, 1.0));
-    out_norm = norm;
+    out_norm = mat3(transpose(inverse(model))) * norm;
     out_color = color;
     
     gl_Position = proj*view*vec4(frag_pos, 1.0);

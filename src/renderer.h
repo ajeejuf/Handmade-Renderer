@@ -93,6 +93,7 @@ typedef struct attrib_t {
     u32 size;
     u32 dynamic;
     u32 update;
+    u32 divisor;
     
     attrib_info_t *info;
     u32 info_count;

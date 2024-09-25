@@ -42,8 +42,11 @@ vec3 calculate_dir_light(dir_light_t light, vec3 normal, vec3 view_dir)
 }
 
 void main() {
+    vec3 color = vec3(0.0);
     vec3 norm = normalize(out_norm);
     vec3 view_dir = normalize(view_pos - frag_pos);
     
-    frag_color = vec4(material.ambient, 1.0);
+    color = calculate_dir_light(dir_light, norm, view_dir);
+    
+    frag_color = vec4(color, 1.0);
 }

@@ -84,10 +84,10 @@ void main() {
     
     vec3 result = vec3(0.0f, 0.0f, 0.0f);
     
-    //result += calculate_dir_light(dir_light, norm, view_dir);
+    result += calculate_dir_light(dir_light, norm, view_dir);
     
-    for (int i = 0; i < 1; i++)
-        result += calculate_point_light(point_lights[i], norm, frag_pos, view_dir);
+    /*for (int i = 0; i < 1; i++)
+        result += calculate_point_light(point_lights[i], norm, frag_pos, view_dir);*/
     
     frag_color = vec4(result, 1.0);
 }

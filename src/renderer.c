@@ -222,9 +222,11 @@ get_attrib_info_by_type(u32 type, u32 *out_count)
 
 internal u32
 add_attribute(renderer_t *rb, u32 shader_id, u32 inst_id,
-              void *data, u32 size, u32 dynamic,
+              void *data, u32 size, u32 count, u32 dynamic,
               attrib_info_t *infos, u32 i_count, const char *name)
 {
+    ASSERT_LOG(count > 0, "Inavalid attribute count of %d", count);
+    
     vertex_array_t *va = rb->va+inst_id;
     
     u32 id = get_stack_count(va->mesh_instance.attribs);
@@ -240,6 +242,7 @@ add_attribute(renderer_t *rb, u32 shader_id, u32 inst_id,
     attrib->size = size;
     attrib->dynamic = dynamic;
     attrib->update = 0;
+    attrib->divisor = ceilf(va->mesh_instance.count/(f32)count);
     
     attrib->info = malloc(sizeof(*infos)*i_count);
     memcpy(attrib->info, infos, sizeof(*infos)*i_count);

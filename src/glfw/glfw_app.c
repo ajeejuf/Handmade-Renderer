@@ -1,7 +1,21 @@
 
-void framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
+void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
 {
     glViewport(0, 0, width, height);
+}
+
+void glfw_key_callback(GLFWwindow *window, int key,
+                       int scancode, int action, int mods)
+{
+    input_t *input = (input_t *)glfwGetWindowUserPointer(window);
+    
+    u32 key_idx = key_conv_table[key];
+    
+    if (action == GLFW_PRESS || action == GLFW_REPEAT)
+        input->key_state[key_idx] |= INPUT_STATE_DOWN;
+    else if (action == GLFW_RELEASE)
+        input->key_state[key_idx] &= ~INPUT_STATE_DOWN;
+    
 }
 
 internal void
@@ -44,7 +58,11 @@ init_glfw_app(glfw_app_t *app, const char **app_func_names, u32 func_count,
     
     // TODO(ajeej): set callbacks
     {
-        glfwSetFramebufferSizeCallback(app->window, framebuffer_size_callback);
+        input_t *input = &app->plat_app.input;
+        glfwSetWindowUserPointer(app->window, input);
+        
+        glfwSetFramebufferSizeCallback(app->window, glfw_framebuffer_size_callback);
+        glfwSetKeyCallback(app->window, glfw_key_callback);
     }
 }
 

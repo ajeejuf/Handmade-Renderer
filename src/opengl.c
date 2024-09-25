@@ -27,7 +27,7 @@ init_renderer(renderer_t *rb, i32 width, i32 height)
     memset(va, 0, sizeof(*va));
     
     init_camera_default(&rb->cam, HMM_V3(0.0f, 0.0f, 3.0f),
-                        0.1f, 0.025f, width/(f32)height);
+                        0.001f, 0.0005f, width/(f32)height);
 }
 
 internal void
@@ -128,14 +128,15 @@ update_renderer(renderer_t *rb)
                     if (!has_name) {
                         loc = glGetAttribLocation(shader->id, info->name);
                         if (loc == -1) continue;
+                        has_name = 1;
                     }
                     
                     glEnableVertexAttribArray(loc+k);
                     glVertexAttribPointer(loc+k, info->count, info->type,
                                           info->normalize, attrib->size,
-                                          (void *)(info->offset*sizeof(u8)));
+                                          (void *)info->offset);
                     
-                    glVertexAttribDivisor(loc+k, 1);
+                    glVertexAttribDivisor(loc+k, attrib->divisor);
                 }
                 
                 glUseProgram(0);
@@ -276,7 +277,7 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vas->ebo);
         glDrawElements(m_info->prim_type, m_info->indices_count,
-                       GL_UNSIGNED_INT, (void *)(m_info->indices_idx*sizeof(u32)));
+                       GL_UNSIGNED_INT, (void *)(m_info->indices_idx));
     }
     
     glBindVertexArray(0);
@@ -297,7 +298,7 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         mesh_info_t *m_info = rb->meshes+inst.mesh_id;
         
         glDrawElementsInstanced(m_info->prim_type, m_info->indices_count,
-                                GL_UNSIGNED_INT, (void *)&m_info->indices_idx,
+                                GL_UNSIGNED_INT, (void *)m_info->indices_idx,
                                 inst.count);
         
         glBindVertexArray(0);
