@@ -6,8 +6,6 @@
 #include <emscripten/key_codes.h>
 #include <dlfcn.h>
 
-typedef void *dll_t;
-
 #define load_library(hnd) dlopen(hnd, RTLD_LAZY)
 #define unload_library(hnd) dlclose(hnd)
 #define load_func(hnd,fn) dlsym(hnd, fn)
@@ -31,6 +29,10 @@ typedef void *dll_t;
 #include "ems_app.c"
 
 
+const u32 TARGET_FPS = 60;
+const f64 FRAME_DURATION = 1000.0 / TARGET_FPS;
+global f64 last_time = 0;
+
 typedef struct main_loop_arg_t {
     ems_app_t *apps;
     u32 count;
@@ -42,26 +44,33 @@ main_loop(void *arg) {
     ems_app_t *apps = data->apps;
     u32 count = data->count;
     
-    ems_app_t *app;
-    app_t *plat_app;
-    for (int i = 0; i < count; i++)
-    {
-        app = apps+i;
-        plat_app = &app->plat_app;
+    f64 current_time = emscripten_get_now();
+    f64 dt = current_time - last_time;
+    
+    if (dt >= FRAME_DURATION) {
         
-        // NOTE(ajeej): Make canvas context current
-        ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
-        emscripten_webgl_make_context_current(app->ctx);
+        ems_app_t *app;
+        app_t *plat_app;
+        for (int i = 0; i < count; i++)
+        {
+            app = apps+i;
+            plat_app = &app->plat_app;
+            
+            // NOTE(ajeej): Make canvas context current
+            ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
+            emscripten_webgl_make_context_current(app->ctx);
+            
+            // NOTE(ajeej): Start Frame
+            start_frame(&plat_app->rb);
+            
+            // NOTE(ajeej): Update and Render
+            ASSERT_LOG(app->funcs.update_and_render, "Error: update_and_render is invalid");
+            app->funcs.update_and_render(plat_app);
+            
+            // NOTE(ajeej): End Frame
+            end_frame(&plat_app->rb);
+        }
         
-        // NOTE(ajeej): Start Frame
-        start_frame(&plat_app->rb);
-        
-        // NOTE(ajeej): Update and Render
-        ASSERT_LOG(app->funcs.update_and_render, "Error: update_and_render is invalid");
-        app->funcs.update_and_render(plat_app);
-        
-        // NOTE(ajeej): End Frame
-        end_frame(&plat_app->rb);
     }
 }
 

@@ -1,4 +1,10 @@
 
+#if __EMSCRIPTEN__
+
+#include <emscripten.h>
+
+#endif
+
 #include "utils.h"
 #include "renderer.h"
 #include "assets.h"
@@ -102,7 +108,7 @@ INIT_APP(init_app)
         HMM_V3(1.0f, 0.0f, 0.0f),
         HMM_V3(0.0f, 1.0f, 0.0f),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V3(0.0f, 0.0f, 0.0f)
+        HMM_V3(0.1f, 0.1f, 0.1f)
     };
     mats_id = create_materials_from_colors(&app->rb, 4, colors);
     

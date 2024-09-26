@@ -27,7 +27,7 @@ init_renderer(renderer_t *rb, i32 width, i32 height)
     memset(va, 0, sizeof(*va));
     
     init_camera_default(&rb->cam, HMM_V3(0.0f, 0.0f, 3.0f),
-                        0.001f, 0.0005f, width/(f32)height);
+                        0.05f, 0.01f, width/(f32)height);
 }
 
 internal void
@@ -189,7 +189,7 @@ set_uniform(shader_t *shader, u32 loc_type, void *data)
     u32 loc = shader->loc[loc_type];
     //LOG("loc %d name %s", loc, shader_loc_names[loc_type]);
     if (loc == -1) {
-        //LOG("Invalid shader location: %s", shader_loc_names[loc_type]);
+        LOG("Invalid shader location: %s", shader_loc_names[loc_type]);
         return;
     }
     
@@ -277,7 +277,7 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vas->ebo);
         glDrawElements(m_info->prim_type, m_info->indices_count,
-                       GL_UNSIGNED_INT, (void *)(m_info->indices_idx));
+                       GL_UNSIGNED_INT, (void *)m_info->indices_idx);
     }
     
     glBindVertexArray(0);

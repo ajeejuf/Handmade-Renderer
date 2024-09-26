@@ -80,7 +80,7 @@ init_ems_app(ems_app_t *app, const char **app_func_names, u32 func_count,
     {
         init_loaded_code(&app->code, (void **)&app->funcs,
                          app_func_names, func_count,
-                         build_dir, name, "wasm");
+                         build_dir, name, "wasm", 0);
         load_code(&app->code);
         ASSERT_LOG(app->code.is_valid, "Error: Failed to load %s.wasm", name);
     }
@@ -108,7 +108,8 @@ init_ems_app(ems_app_t *app, const char **app_func_names, u32 func_count,
     
     // NOTE(ajeej): Init Plat App
     i32 w, h;
-    emscripten_get_canvas_element_size(canvas_id, &w, &h);
+    emscripten_get_canvas_element_size(full_canvas, &w, &h);
+    LOG("Width: %d  Height: %d", w, h);
     init_plat_app(&app->plat_app, w, h);
     
     // NOTE(ajeej): Set emscripten callbacks
