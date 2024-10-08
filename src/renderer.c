@@ -225,7 +225,7 @@ add_attribute(renderer_t *rb, u32 shader_id, u32 inst_id,
               void *data, u32 size, u32 count, u32 dynamic,
               attrib_info_t *infos, u32 i_count, const char *name)
 {
-    ASSERT_LOG(count > 0, "Inavalid attribute count of %d", count);
+    ASSERT_LOG(count > 0, "Invalid attribute count of %d", count);
     
     vertex_array_t *va = rb->va+inst_id;
     

@@ -33,10 +33,10 @@ internal const char *ems_result_to_cstr(EMSCRIPTEN_RESULT res)
 internal EM_BOOL 
 ems_key_callback(i32 event_type, const EmscriptenKeyboardEvent *e, void *user_data)
 {
-    /*LOG("%s, key: \"%s\", code: \"%s\", location: %u,%s%s%s%s repeat: %d, locale: \"%s\", char: \"%s\", charCode: %u, keyCode: %u, which: %u, timestamp: %lf",
+    LOG("%s, key: \"%s\", code: \"%s\", location: %u,%s%s%s%s repeat: %d, locale: \"%s\", char: \"%s\", charCode: %u, keyCode: %u, which: %u, timestamp: %lf",
         ems_event_type_to_cstr(event_type), e->key, e->code, e->location,
         e->ctrlKey ? " CTRL" : "", e->shiftKey ? " SHIFT" : "", e->altKey ? " ALT" : "", e->metaKey ? " META" : "",
-        e->repeat, e->locale, e->charValue, e->charCode, e->keyCode, e->which, e->timestamp);*/
+        e->repeat, e->locale, e->charValue, e->charCode, e->keyCode, e->which, e->timestamp);
     
     input_t *input = (input_t *)user_data;
     

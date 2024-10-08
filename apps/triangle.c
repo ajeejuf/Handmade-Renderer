@@ -100,6 +100,7 @@ INIT_APP(init_app)
         HMM_V3(0.0f, 0.0f, 0.0f),
         HMM_V3(1.0f, 1.0f, 1.0f),
     };
+    
     cube_id = create_cube(&app->rb, make_color(255, 0, 0, 255));
     entity_id = create_entity(app, t_info, cube_id, mats_id);
     

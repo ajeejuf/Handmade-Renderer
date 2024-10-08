@@ -22,10 +22,10 @@ load_paths = {
  { load_paths_custom, .os = "win"  },
 };
 
-win32_build = ".\glfw\win32\win32_build.bat triangle";
-win32_debug = ".\glfw\win32\win32_debug.bat";
-ems_build = ".\ems\ems_build.bat";
-ems_run = ".\ems\ems_run.bat";
+win32_build = ".\win32_build.bat triangle demo";
+win32_debug = ".\win32_debug.bat";
+ems_build = ".\ems_build.bat";
+ems_run = ".\ems_run.bat";
 
 command_list = {
  { .name = "win32_build",

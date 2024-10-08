@@ -189,7 +189,7 @@ set_uniform(shader_t *shader, u32 loc_type, void *data)
     u32 loc = shader->loc[loc_type];
     //LOG("loc %d name %s", loc, shader_loc_names[loc_type]);
     if (loc == -1) {
-        LOG("Invalid shader location: %s", shader_loc_names[loc_type]);
+        //LOG("Invalid shader location: %s", shader_loc_names[loc_type]);
         return;
     }
     
@@ -273,8 +273,6 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         set_uniform(shader, SHADER_LOC_MATRIX_MODEL, trans);
         set_material(rb, shader, cmd->mat_id);
         
-        //glDrawArrays(GL_TRIANGLES, 0, 3);
-        
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vas->ebo);
         glDrawElements(m_info->prim_type, m_info->indices_count,
                        GL_UNSIGNED_INT, (void *)m_info->indices_idx);
@@ -297,8 +295,9 @@ submit_renderer(renderer_t *rb, shader_t *shader)
         instance_t inst = va->mesh_instance;
         mesh_info_t *m_info = rb->meshes+inst.mesh_id;
         
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, va->ebo);
         glDrawElementsInstanced(m_info->prim_type, m_info->indices_count,
-                                GL_UNSIGNED_INT, (void *)m_info->indices_idx,
+                                GL_UNSIGNED_INT, (void *)(m_info->indices_idx),
                                 inst.count);
         
         glBindVertexArray(0);
@@ -310,7 +309,7 @@ submit_renderer(renderer_t *rb, shader_t *shader)
 internal void
 start_frame(renderer_t *rb)
 {
-    glClearColor(0.4f, 0.4f, 0.4f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 

@@ -452,7 +452,7 @@ create_triangle_instance(renderer_t *rb, color_t color, u32 count)
 {
     u32 id = get_stack_count(rb->va);
     vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0 , sizeof(*va));
+    memset(va, 0, sizeof(*va));
     
     u32 mesh_id = __create_triangle(rb, color, id);
     init_instance(&va->mesh_instance, mesh_id, count);
