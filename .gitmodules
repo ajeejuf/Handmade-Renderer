@@ -1,0 +1,6 @@
+[submodule "lib/emsdk"]
+	path = lib/emsdk
+	url = https://github.com/emscripten-core/emsdk.git
+[submodule "lib/dawn"]
+	path = lib/dawn
+	url = https://dawn.googlesource.com/dawn
