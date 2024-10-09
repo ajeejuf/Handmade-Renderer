@@ -4,3 +4,6 @@
 [submodule "lib/dawn"]
 	path = lib/dawn
 	url = https://dawn.googlesource.com/dawn
+[submodule "lib/depot_tools"]
+	path = lib/depot_tools
+	url = https://chromium.googlesource.com/chromium/tools/depot_tools.git
