@@ -10,3 +10,6 @@
 [submodule "lib/glfw"]
 	path = lib/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "lib/glfw3webgpu"]
+	path = lib/glfw3webgpu
+	url = https://github.com/eliemichel/glfw3webgpu.git
