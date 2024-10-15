@@ -7,3 +7,6 @@
 [submodule "lib/dawn"]
 	path = lib/dawn
 	url = https://dawn.googlesource.com/dawn
+[submodule "lib/glfw"]
+	path = lib/glfw
+	url = https://github.com/glfw/glfw.git
