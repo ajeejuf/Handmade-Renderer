@@ -50,9 +50,9 @@ command_list = {
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
    .cmd = { {webgpu_build, .os ="win"  }, }, 
  },
-{ .name = "webgpu_run",
+{ .name = "webgpu_debug",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
-   .cmd = { {webgpu_run, .os ="win"  }, }, 
+   .cmd = { {webgpu_debug, .os ="win"  }, }, 
  },
 };
 
