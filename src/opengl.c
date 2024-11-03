@@ -21,16 +21,6 @@ free_vertex_array(vertex_array_t *va)
 }
 
 internal void
-init_renderer(renderer_t *rb, i32 width, i32 height)
-{
-    vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0, sizeof(*va));
-    
-    init_camera_default(&rb->cam, HMM_V3(0.0f, 0.0f, 3.0f),
-                        0.05f, 0.01f, width/(f32)height);
-}
-
-internal void
 free_renderer(renderer_t *rb)
 {
     u32 count = get_stack_count(rb->va);
@@ -306,14 +296,14 @@ submit_renderer(renderer_t *rb, shader_t *shader)
     stack_clear(shader->inst_ids);
 }
 
-internal void
+/*internal void
 start_frame(renderer_t *rb)
 {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
+}*/
 
-internal void
+/*internal void
 end_frame(renderer_t *rb)
 {
     shader_t *shader;
@@ -351,4 +341,4 @@ end_frame(renderer_t *rb)
         
         glUseProgram(0);
     }
-}
+}*/

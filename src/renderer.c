@@ -85,14 +85,20 @@ set_camera_pos(camera_t *cam, v3 pos)
     cam->pos = pos;
 }
 
+internal void
+init_app_renderer(renderer_t *rb, i32 width, i32 height)
+{
+    init_camera_default(&rb->cam, HMM_V3(0.0f, 0.0f, 3.0f),
+                        0.05f, 0.01f, width/(f32)height);
+}
+
 internal u32
-push_mesh_info(renderer_t *rb, vertex_array_t *va, 
-               u32 idx_count, u32 prim_type)
+push_mesh_info(renderer_t *rb, u32 idx_count, u32 prim_type)
 {
     u32 id = get_stack_count(rb->meshes);
     
     mesh_info_t *info = stack_push(&rb->meshes);
-    info->indices_idx = get_stack_count(va->indices);
+    info->indices_idx = get_stack_count(rb->indices);
     info->indices_count = idx_count;
     info->prim_type = prim_type;
     
@@ -103,9 +109,8 @@ internal void
 push_render_cmd(renderer_t *rb, 
                 u32 mesh_id, u32 mat_id, u32 trans_id)
 {
-    rb->shaders[rb->cur_shader].cmds.count++;
-    
-    render_cmd_t *cmd = stack_push(&rb->cmds);
+    render_cmd_t **cmds = &rb->render_pipelines[rb->cur_pipeline].cmds;
+    render_cmd_t *cmd = stack_push(cmds);
     
     cmd->mesh_id = mesh_id;
     cmd->mat_id = mat_id;
@@ -157,136 +162,222 @@ create_material(renderer_t *rb, v3 ambient, v3 diffuse, v3 specular,
     return id;
 }
 
+
 internal u32
-get_attrib_data_type_size(u32 attrib_type)
+add_compute_pipeline(renderer_t *rb, u32 shader_id,
+                     u32 *bg_ids, u32 bg_count)
 {
-    switch (attrib_type)
-    {
-        case ATTRIB_DATA_TYPE_BYTE: { return 1; } break;
-        case ATTRIB_DATA_TYPE_UNSIGNED_BYTE: { return 1; } break;
-        case ATTRIB_DATA_TYPE_SHORT: { return 2; } break;
-        case ATTRIB_DATA_TYPE_UNSIGNED_SHORT: { return 2; } break;
-        case ATTRIB_DATA_TYPE_INT: { return 4; } break;
-        case ATTRIB_DATA_TYPE_UNSIGNED_INT: { return 4; } break;
-        case ATTRIB_DATA_TYPE_FLOAT: { return 4; } break;
-    }
+    u32 id = get_stack_count(rb->compute_pipelines);
     
-    return 0;
+    compute_pipeline_t *pipeline = stack_push(&rb->compute_pipelines);
+    
+    pipeline->bg_count = bg_count;
+    pipeline->bg_layout_ids = (u32 *)malloc(sizeof(*bg_ids)*bg_count);
+    memcpy(pipeline->bg_layout_ids, bg_ids, sizeof(*bg_ids)*bg_count);
+    
+    return id;
 }
 
-internal attrib_info_t
-get_attrib_info(u32 count, u32 type, u32 normalize, u32 offset, const char *name)
+internal u32
+add_render_pipeline(renderer_t *rb, u32 shader_id,
+                    u32 *vb_ids, u32 vb_count,
+                    u32 *bg_ids, u32 bg_count)
 {
-    attrib_info_t info = {0};
+    u32 id = get_stack_count(rb->render_pipelines);
     
-    info.count = count;
-    info.type = type;
-    info.normalize = normalize;
-    info.offset = offset;
+    render_pipeline_t *pipeline = stack_push(&rb->render_pipelines);
+    pipeline->shader_id = shader_id;
+    pipeline->cmds = NULL;
     
-    if (name)
-        info.name = cstr_dup((char *)name);
+    pipeline->vb_count = vb_count;
+    pipeline->vb_layout_ids = (u32 *)malloc(sizeof(*vb_ids)*vb_count);
+    memcpy(pipeline->vb_layout_ids, vb_ids, sizeof(*vb_ids)*vb_count);
     
-    return info;
-}
-
-internal attrib_info_t *
-get_attrib_info_by_type(u32 type, u32 *out_count)
-{
-    attrib_info_t *res = NULL;
-    *out_count = 0;
+    pipeline->bg_count = bg_count;
+    pipeline->bg_layout_ids = (u32 *)malloc(sizeof(*bg_ids)*bg_count);
+    memcpy(pipeline->bg_layout_ids, bg_ids, sizeof(*bg_ids)*bg_count);
     
-    switch (type)
+    u32 *bg_layout_id;
+    bind_group_layout_t *layout;
+    for (u32 bg_idx = 0; bg_idx < bg_count; bg_idx++)
     {
-        case ATTRIB_TYPE_MAT4: {
-            res = malloc(sizeof(attrib_info_t)*4);
-            for (u32 i = 0; i < 4; i++)
-                res[i] = get_attrib_info(4, ATTRIB_DATA_TYPE_FLOAT, 0, sizeof(v4)*i, NULL);
-            
-            *out_count = 4;
-        } break;
+        layout = rb->bg_layouts + bg_idx;
         
-        case ATTRIB_TYPE_MATERIAL: {
-            res = malloc(sizeof(attrib_info_t)*4);
-            res[0] = get_attrib_info(3, ATTRIB_DATA_TYPE_FLOAT, 0, offsetof(material_t, ambient), "inst_mat_ambient");
-            res[1] = get_attrib_info(3, ATTRIB_DATA_TYPE_FLOAT, 0, offsetof(material_t, diffuse), "inst_mat_diffuse");
-            res[2] = get_attrib_info(3, ATTRIB_DATA_TYPE_FLOAT, 0, offsetof(material_t, specular), "inst_mat_specular");
-            res[3] = get_attrib_info(1, ATTRIB_DATA_TYPE_FLOAT, 0, offsetof(material_t, shininess), "inst_mat_shininess");
+        switch (layout->type)
+        {
+            case BIND_GROUP_TYPE_CONSTANT: {
+                bg_layout_id = stack_push(&pipeline->bg_const_ids);
+            } break;
             
-            *out_count = 4;
-        } break;
+            case BIND_GROUP_TYPE_FRAME: {
+                bg_layout_id = stack_push(&pipeline->bg_frame_ids);
+            } break;
+            
+            case BIND_GROUP_TYPE_DRAW: {
+                bg_layout_id = stack_push(&pipeline->bg_draw_ids);
+            } break;
+            
+            default: {
+                ASSERT_LOG(0, "Invalid bind group type");
+            };
+        }
+        
+        *bg_layout_id = bg_idx;
     }
-    
-    return res;
-}
-
-internal u32
-add_attribute(renderer_t *rb, u32 shader_id, u32 inst_id,
-              void *data, u32 size, u32 count, u32 dynamic,
-              attrib_info_t *infos, u32 i_count, const char *name)
-{
-    ASSERT_LOG(count > 0, "Invalid attribute count of %d", count);
-    
-    vertex_array_t *va = rb->va+inst_id;
-    
-    u32 id = get_stack_count(va->mesh_instance.attribs);
-    attrib_t *attrib = stack_push(&va->mesh_instance.attribs);
-    memset(attrib, 0, sizeof(*attrib));
-    
-    attrib->inst_id = inst_id;
-    attrib->shader_id = shader_id;
-    
-    attrib->data = data;
-    
-    attrib->count = va->mesh_instance.count;
-    attrib->size = size;
-    attrib->dynamic = dynamic;
-    attrib->update = 0;
-    attrib->divisor = ceilf(va->mesh_instance.count/(f32)count);
-    
-    attrib->info = malloc(sizeof(*infos)*i_count);
-    memcpy(attrib->info, infos, sizeof(*infos)*i_count);
-    
-    attrib->info_count = i_count;
-    
-    if(name)
-        attrib->name = cstr_dup((char *)name);
     
     return id;
 }
 
 internal void
-flag_attribute(renderer_t *rb, u32 inst_id, u32 attrib_id)
+get_attribute_info_from_type(u32 type, u32 start_loc, 
+                             u32 *out_stride,
+                             attribute_t **out_attribs, u32 *out_attrib_count)
 {
-    vertex_array_t *va = rb->va + inst_id;
-    attrib_t *attrib = va->mesh_instance.attribs + attrib_id;
+    attribute_t *attribs;
+    u32 stride, attrib_count;
+    switch(type)
+    {
+        case ATTRIBUTE_VERTEX: {
+            attribs = (attribute_t *)malloc(sizeof(attribute_t)*4);
+            attribs[0].loc = start_loc;
+            attribs[0].type = ATTRIBUTE_FORMAT_FLOAT32x3;
+            attribs[0].offset = 0;
+            
+            attribs[1].loc = start_loc+1;
+            attribs[1].type = ATTRIBUTE_FORMAT_FLOAT32x3;
+            attribs[1].offset = offsetof(vertex_t, norm);
+            
+            attribs[2].loc = start_loc+2;
+            attribs[2].type = ATTRIBUTE_FORMAT_FLOAT32x2;
+            attribs[2].offset = offsetof(vertex_t, uv);
+            
+            attribs[3].loc = start_loc+3;
+            attribs[3].type = ATTRIBUTE_FORMAT_FLOAT32x4;
+            attribs[3].offset = offsetof(vertex_t, color);
+            
+            stride = sizeof(vertex_t);
+            attrib_count = 4;
+        } break;
+        
+        default: {
+            ASSERT("Invalid attribute type");
+        } break;
+    }
     
-    attrib->update = 1;
+    *out_stride = stride;
+    *out_attribs = attribs;
+    *out_attrib_count = attrib_count;
+    
+    return;
+}
+
+internal u32
+add_custom_vertex_buffer(renderer_t *rb,
+                         u32 stride, u32 mode,
+                         vertex_buffer_data_t data,
+                         attribute_t *attribs, u32 attrib_count)
+{
+    u32 id = get_stack_count(rb->vb_layouts);
+    
+    vertex_buffer_layout_t *vb_layout = (vertex_buffer_layout_t *)stack_push(&rb->vb_layouts);
+    
+    vb_layout->stride = stride;
+    vb_layout->mode = mode;
+    vb_layout->data = data;
+    vb_layout->attribs = attribs;
+    vb_layout->attrib_count = attrib_count;
+    
+    return id;
+}
+
+internal u32
+add_vertex_buffer(renderer_t *rb, 
+                  void *data, u64 count, 
+                  u32 type, u32 loc, u32 mode)
+{
+    u32 stride = 0, attrib_count = 0;
+    attribute_t *attribs = NULL;
+    get_attribute_info_from_type(type, loc, &stride, &attribs, &attrib_count);
+    
+    vertex_buffer_data_t vb_data = (vertex_buffer_data_t) {
+        .data = data,
+        .count = count,
+        .el_size = stride,
+    };
+    
+    return add_custom_vertex_buffer(rb, stride, mode, vb_data, attribs, attrib_count);
+}
+
+internal u32
+add_buffer(renderer_t *rb, u32 usage)
+{
+    u32 id = get_stack_count(rb->buffers);
+    
+    buffer_info_t *info = (buffer_info_t *)stack_push(&rb->buffers);
+    
+    info->size = 0;
+    info->usage = usage;
+    
+    return id;
+}
+
+#define get_bind_layout_for_struct(d, b, v, b_i, b_t) \
+get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), 1, 0, 0)
+
+#define get_bind_layout_for_array(d, c, b, v, b_i, b_t) \
+get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 0, 0)
+
+#define get_dynamic_bind_layout_for_struct(d, c, b, v, b_i, b_t, i_o) \
+get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 1, i_o)
+
+#define get_dynamic_bind_layout_for_array(d, c, c_d, b, v, b_i, b_t, i_o) \
+get_bind_layout(d, b, v, b_i, b_t, sizeof(*d)*c, c_d, 1, i_o)
+
+internal bind_layout_t
+get_bind_layout(void *data, u32 binding, u32 visibility, u32 buffer_id, u32 buffer_type,
+                u32 size, u32 count, u32 has_dynamic_offset, u32 id_offset)
+{
+    return (bind_layout_t) {
+        .data = data,
+        .binding = binding,
+        .visibility = visibility,
+        .buffer_id = buffer_id,
+        .buffer_type = buffer_type,
+        .offset = 0,
+        .size = size,
+        .aligned_size = 0,
+        .has_dynamic_offset = has_dynamic_offset,
+        .count = count,
+        .stride = 0,
+        .id_offset = id_offset
+    };
+}
+
+internal u32
+add_bind_group(renderer_t *rb, bind_layout_t *binds, u32 count, u32 type)
+{
+    u32 id = get_stack_count(rb->bg_layouts);
+    
+    bind_group_layout_t *layout = (bind_group_layout_t *)stack_push(&rb->bg_layouts);
+    
+    memcpy(layout->binds, binds, sizeof(*binds)*count);
+    layout->count = count;
+    layout->type = type;
+    
+    return id;
 }
 
 internal void
-init_instance(instance_t *instance, u32 mesh_id, u32 count)
+use_render_pipeline(renderer_t *rb, u32 p_id)
 {
-    memset(instance, 0, sizeof(*instance));
-    instance->mesh_id = mesh_id;
-    instance->count = count;
+    rb->cur_pipeline = p_id;
 }
 
 internal void
-add_instance(renderer_t *rb, u32 inst_id)
+submit_pipeline(renderer_t *rb, u32 type, u32 id)
 {
-    u32 count = get_stack_count(rb->va);
-    ASSERT(inst_id > 0 && inst_id < count);
+    pipeline_submission_t *p_submit = (pipeline_submission_t *)stack_push(&rb->p_submit);
     
-    shader_t *shader = rb->shaders+rb->cur_shader;
-    *(u32 *)stack_push(&shader->inst_ids) = inst_id;
-}
-
-internal void
-use_shader(renderer_t *rb, u32 id)
-{
-    ASSERT(id >= 0 && id < get_stack_count(rb->shaders));
-    rb->shaders[id].cmds.idx = get_stack_count(rb->cmds);
-    
-    rb->cur_shader = id;
+    p_submit->type = type;
+    p_submit->id = id;
 }

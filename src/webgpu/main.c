@@ -20,16 +20,8 @@ typedef struct wgpu_renderer_t {
 
 const char *shader_src = "\
 @vertex  \n\
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f { \n \
-    \tvar p = vec2f(0.0, 0.0);  \n \
-\tif (in_vertex_index == 0u) {  \n\
-\t\tp = vec2f(-0.5, -0.5);  \n\
-\t} else if (in_vertex_index == 1u) {  \n\
-\t\tp = vec2f(0.5, -0.5);  \n\
-\t} else {  \n\
-\t\tp = vec2f(0.0, 0.5);  \n\
-\t}  \n\
-\treturn vec4f(p, 0.0, 1.0);  \n\
+fn vs_main(@location(0) in_vertex_pos: vec2f) -> @builtin(position) vec4f { \n \
+\treturn vec4f(in_vertex_pos, 0.0, 1.0);  \n\
 }  \n\
   \n\
 @fragment  \n\
@@ -44,8 +36,38 @@ fn fs_main() -> @location(0) vec4f {  \n\
 int main(int argc, char *argv[])
 {
     wgpu_renderer_t wgpu = {0};
-    wgpu_init(&wgpu);
+    wgpu_init(&wgpu, "..\\data\\shaders\\shader.wgsl");
     
+    f32 vertex_data[] = {
+        -0.5, -0.5, 1.0, 0.0, 0.0,
+        +0.5, -0.5, 0.0, 1.0, 0.0,
+        +0.5, +0.5, 0.0, 0.0, 1.0,
+        -0.5, +0.5, 1.0, 1.0, 0.0
+    };
+    
+    u16 index_data[] = {
+        0, 1, 2,
+        0, 2, 3
+    };
+    
+    WGPUBufferDescriptor buffer_desc = {0};
+    buffer_desc.nextInChain = NULL;
+    buffer_desc.size = sizeof(vertex_data);
+    buffer_desc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
+    buffer_desc.mappedAtCreation = 0;
+    
+    WGPUBuffer vertex_buffer = wgpuDeviceCreateBuffer(wgpu.device, &buffer_desc);
+    
+    wgpuQueueWriteBuffer(wgpu.queue, vertex_buffer, 0, vertex_data, buffer_desc.size);
+    
+    buffer_desc.size = sizeof(index_data);
+    buffer_desc.size = (buffer_desc.size + 3) & ~3;
+    buffer_desc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
+    
+    WGPUBuffer index_buffer = wgpuDeviceCreateBuffer(wgpu.device, &buffer_desc);
+    
+    wgpuQueueWriteBuffer(wgpu.queue, index_buffer, 0, index_data,
+                         buffer_desc.size);
     
     while (!glfwWindowShouldClose(wgpu.window)) 
     {
@@ -83,7 +105,13 @@ int main(int argc, char *argv[])
         WGPURenderPassEncoder render_pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
         
         wgpuRenderPassEncoderSetPipeline(render_pass, wgpu.pipeline);
-        wgpuRenderPassEncoderDraw(render_pass, 3, 1, 0, 0);
+        
+        wgpuRenderPassEncoderSetVertexBuffer(render_pass, 0, vertex_buffer, 0,
+                                             wgpuBufferGetSize(vertex_buffer));
+        wgpuRenderPassEncoderSetIndexBuffer(render_pass, index_buffer, WGPUIndexFormat_Uint16,
+                                            0, wgpuBufferGetSize(index_buffer));
+        
+        wgpuRenderPassEncoderDrawIndexed(render_pass, ARRAY_COUNT(index_data), 1, 0, 0, 0);
         
         wgpuRenderPassEncoderEnd(render_pass);
         wgpuRenderPassEncoderRelease(render_pass);
@@ -106,8 +134,11 @@ int main(int argc, char *argv[])
         
         wgpuTextureViewRelease(target_view);
         wgpuSurfacePresent(wgpu.surface);
+        
+        wgpuDeviceTick(wgpu.device);
     }
     
+    wgpuBufferRelease(vertex_buffer);
     wgpu_free(&wgpu);
     
     return 0;

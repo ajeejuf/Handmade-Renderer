@@ -58,5 +58,3 @@ command_list = {
 
 fkey_command[1] = "webgpu_build";
 fkey_command[2] = "webgpu_debug";
-fkey_command[3] = "ems_build";
-fkey_command[4] = "ems_run";

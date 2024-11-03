@@ -1,6 +1,6 @@
 
 internal void
-wgpu_init_pipeline(wgpu_renderer_t *wgpu)
+wgpu_init_pipeline(wgpu_renderer_t *wgpu, const char *shader_src)
 {
     WGPUShaderModuleDescriptor shader_desc = {0};
     WGPUShaderSourceWGSL wgsl_source = {0};
@@ -15,12 +15,31 @@ wgpu_init_pipeline(wgpu_renderer_t *wgpu)
     
     WGPUShaderModule shader_module = wgpuDeviceCreateShaderModule(wgpu->device, &shader_desc);
     
+    WGPUVertexAttribute vert_attrib[2];
+    vert_attrib[0] = (WGPUVertexAttribute) {
+        .shaderLocation = 0,
+        .format = WGPUVertexFormat_Float32x2,
+        .offset = 0,
+    };
+    vert_attrib[1] = (WGPUVertexAttribute) {
+        .shaderLocation = 1,
+        .format = WGPUVertexFormat_Float32x3,
+        .offset = 2 * sizeof(f32),
+    };
+    
+    WGPUVertexBufferLayout vertex_buffer_layout = {
+        .attributeCount = 2,
+        .attributes = vert_attrib,
+        .arrayStride = 5 * sizeof(f32),
+        .stepMode = WGPUVertexStepMode_Vertex
+    };
+    
     WGPURenderPipelineDescriptor pipeline_desc = {0};
     pipeline_desc.nextInChain = NULL;
     
     pipeline_desc.vertex = (WGPUVertexState){
-        .bufferCount = 0,
-        .buffers = NULL,
+        .bufferCount = 1,
+        .buffers = &vertex_buffer_layout,
         .module = shader_module,
         .entryPoint =  (WGPUStringView){ 
             .data = "vs_main",
@@ -78,7 +97,63 @@ wgpu_init_pipeline(wgpu_renderer_t *wgpu)
 }
 
 internal void
-wgpu_init(wgpu_renderer_t *wgpu)
+set_default_limits(WGPULimits *limits) {
+    limits->maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxTextureDimension2D = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxTextureDimension3D = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxTextureArrayLayers = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxBindGroups = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxBindGroupsPlusVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxBindingsPerBindGroup = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxSampledTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxSamplersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxStorageBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxStorageTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxUniformBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxUniformBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
+    limits->maxStorageBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
+    limits->minUniformBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
+    limits->minStorageBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxBufferSize = WGPU_LIMIT_U64_UNDEFINED;
+    limits->maxVertexAttributes = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxVertexBufferArrayStride = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxInterStageShaderVariables = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxColorAttachments = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxComputeWorkgroupStorageSize = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxComputeWorkgroupSizeX = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxComputeWorkgroupSizeY = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxComputeWorkgroupSizeZ = WGPU_LIMIT_U32_UNDEFINED;
+    limits->maxComputeWorkgroupsPerDimension = WGPU_LIMIT_U32_UNDEFINED;
+}
+
+internal WGPURequiredLimits 
+get_required_limits(WGPUAdapter adapter) 
+{
+    WGPUSupportedLimits supported_limits = {0};
+    supported_limits.nextInChain = NULL;
+    wgpuAdapterGetLimits(adapter, &supported_limits);
+    
+    WGPURequiredLimits required_limits = {0};
+    set_default_limits(&required_limits.limits);
+    
+    required_limits.limits.maxVertexAttributes = 2;
+    required_limits.limits.maxVertexBuffers = 1;
+    required_limits.limits.maxBufferSize = 6 * 5 * sizeof(f32);
+    required_limits.limits.maxVertexBufferArrayStride = 5 * sizeof(f32);
+    required_limits.limits.maxInterStageShaderComponents = 3;
+    
+    required_limits.limits.minUniformBufferOffsetAlignment = supported_limits.limits.minUniformBufferOffsetAlignment;
+    required_limits.limits.minStorageBufferOffsetAlignment = supported_limits.limits.minStorageBufferOffsetAlignment;
+    
+    return required_limits;
+}
+
+internal void
+wgpu_init(wgpu_renderer_t *wgpu, const char *shader_path)
 {
     ASSERT_LOG(glfwInit(), "Could not initialize GLFW!");
     
@@ -132,6 +207,7 @@ wgpu_init(wgpu_renderer_t *wgpu)
     
     // NOTE(ajeej):  Get WebGPU Device
     
+    WGPURequiredLimits required_limits = get_required_limits(adapter);
     WGPUDeviceDescriptor device_desc = {0};
     device_desc.nextInChain = NULL;
     device_desc.label = (WGPUStringView){ 
@@ -139,7 +215,7 @@ wgpu_init(wgpu_renderer_t *wgpu)
         .length = strlen("WebGPU Device")
     };
     device_desc.requiredFeatureCount = 0;
-    device_desc.requiredLimits = NULL;
+    device_desc.requiredLimits = &required_limits;
     device_desc.defaultQueue.nextInChain = NULL;
     device_desc.defaultQueue.label = (WGPUStringView){ 
         .data = "Default Queue",
@@ -191,7 +267,8 @@ wgpu_init(wgpu_renderer_t *wgpu)
     wgpu->device = device;
     wgpu->queue = queue;
     
-    wgpu_init_pipeline(wgpu);
+    const char *src = read_file(shader_path, NULL);
+    wgpu_init_pipeline(wgpu, src);
 }
 
 internal void
@@ -216,10 +293,7 @@ get_next_surface_texture_view(WGPUSurface surface)
     
     WGPUTextureViewDescriptor view_desc = {0};
     view_desc.nextInChain = NULL;
-    view_desc.label = (WGPUStringView){ 
-        .data = "Surface Texture View",
-        .length = strlen("Surface Texture View")
-    };
+    view_desc.label = make_wgpu_str("Surface Texture View");
     view_desc.format = wgpuTextureGetFormat(surface_texture.texture);
     view_desc.dimension = WGPUTextureViewDimension_2D;
     view_desc.baseMipLevel = 0;

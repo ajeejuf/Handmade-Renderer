@@ -1,3 +1,3 @@
 @echo off
 
-devenv ..\build\wgpu_test.exe
+devenv ..\build\wgpu_app.exe

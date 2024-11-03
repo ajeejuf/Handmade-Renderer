@@ -253,6 +253,13 @@ check_bit(u8 *ar, u64 bit_idx)
     return (ar[byte_idx] & (1 << bit_pos)) != 0;
 }
 
+// NOTE(ajeej): only works with powers of 2
+internal u64
+align_offset(u64 offset, u64 alignment)
+{
+    return (offset + alignment - 1) & ~(alignment - 1);
+}
+
 
 // NOTE(ajeej): File IO
 
@@ -270,8 +277,22 @@ get_build_dir(char *execute_path)
     return res;
 }
 
+internal u32
+get_extension(char *ext, char *path)
+{
+    char *period = strrchr(path, '.');
+    
+    if (period == NULL)
+        return 0;
+    
+    u32 len = strlen(period);
+    memcpy(ext, period+1, len);
+    
+    return 1;
+}
+
 internal char *
-read_file(char *fn, size_t *o_size)
+read_file(const char *fn, size_t *o_size)
 {
     FILE *file = fopen(fn, "r");
     ASSERT_LOG(file != NULL, "Couldn't open file %s", fn);
