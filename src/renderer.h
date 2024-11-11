@@ -114,6 +114,87 @@ typedef struct render_cmd_t {
 } render_cmd_t;
 
 
+enum {
+    TEXTURE_FORMAT_R8U_NORM,
+    TEXTURE_FORMAT_R8S_NORM,
+    TEXTURE_FORMAT_R8U_INT,
+    TEXTURE_FORMAT_R8S_INT,
+    TEXTURE_FORMAT_R16U_INT,
+    TEXTURE_FORMAT_R16S_INT,
+    TEXTURE_FORMAT_R16_FLOAT,
+    TEXTURE_FORMAT_RG8U_NORM,
+    TEXTURE_FORMAT_RG8S_NORM,
+    TEXTURE_FORMAT_RG8U_INT,
+    TEXTURE_FORMAT_RG8S_INT,
+    TEXTURE_FORMAT_R32U_INT,
+    TEXTURE_FORMAT_R32S_INT,
+    TEXTURE_FORMAT_R32_FLOAT,
+    TEXTURE_FORMAT_RG16U_INT,
+    TEXTURE_FORMAT_RG16S_INT,
+    TEXTURE_FORMAT_RG16_FLOAT,
+    TEXTURE_FORMAT_RGBA8U_NORM,
+    TEXTURE_FORMAT_RGBA8S_NORM,
+    TEXTURE_FORMAT_RGBA8U_INT,
+    TEXTURE_FORMAT_RGBA8S_INT,
+    TEXTURE_FORMAT_RG32U_INT,
+    TEXTURE_FORMAT_RG32S_INT,
+    TEXTURE_FORMAT_RG32_FLOAT,
+    TEXTURE_FORMAT_RGBA16U_INT,
+    TEXTURE_FORMAT_RGBA16S_INT,
+    TEXTURE_FORMAT_RGBA16_FLOAT,
+    TEXTURE_FORMAT_RGBA32U_INT,
+    TEXTURE_FORMAT_RGBA32S_INT,
+    TEXTURE_FORMAT_RGBA32_FLOAT
+};
+
+enum {
+    TEXTURE_USAGE_COPY_SRC = (1 << 0),
+    TEXTURE_USAGE_COPY_DST = (1 << 1),
+    TEXTURE_USAGE_TEXTURE_BINDING = (1 << 2),
+    TEXTURE_USAGE_STORAGE_BINDING = (1 << 3),
+    TEXTURE_USAGE_RENDER_ATTACHMENT = (1 << 4)
+};
+
+enum {
+    TEXTURE_ACCESS_WRITEONLY,
+    TEXTURE_ACCESS_READONLY,
+    TEXTURE_ACCESS_READWRITE
+};
+
+enum {
+    TEXTURE_DIM_1D,
+    TEXTURE_DIM_2D,
+    TEXTURE_DIM_3D,
+};
+
+enum {
+    TEXTURE_VIEW_DIM_1D,
+    TEXTURE_VIEW_DIM_2D,
+    TEXTURE_VIEW_DIM_2DARRAY,
+    TEXTURE_VIEW_DIM_CUBE,
+    TEXTURE_VIEW_DIM_CUBEARRAY,
+    TEXTURE_VIEW_DIM_3D
+};
+
+enum {
+    SAMPLER_TYPE_FILTERING,
+    SAMPLER_TYPE_NONFILTERING,
+    SAMPLER_TYPE_COMPARISON
+};
+
+typedef struct texture_info_t {
+    void *data;
+    
+    u32 dim_type;
+    u32 size[3];
+    
+    u32 mip_level_count;
+    u32 sample_count;
+    
+    u32 format;
+    u32 usage;
+} texture_info_t;
+
 
 enum {
     ATTRIBUTE_VERTEX,
@@ -152,7 +233,8 @@ typedef struct vertex_buffer_layout_t {
 
 enum {
     SHADER_VISIBILITY_VERTEX = (1 << 0),
-    SHADER_VISIBILITY_FRAGMENT = (1 << 1)
+    SHADER_VISIBILITY_FRAGMENT = (1 << 1),
+    SHADER_VISIBILITY_COMPUTE = (1 << 2)
 };
 
 enum {
@@ -185,11 +267,23 @@ enum {
 // count to represent two different counts in
 // those different situations but im not sure
 // how or if i want to fix this.
-typedef struct bind_layout_t {
+
+typedef struct sampler_bind_layout_t {
+    u32 id;
+    u32 type;
+} sampler_bind_layout_t;
+
+typedef struct storage_texture_bind_layout_t {
+    u32 id;
+    u32 access;
+} storage_texture_bind_layout_t;
+
+typedef struct texture_bind_layout_t {
+    u32 id;
+} texture_bind_layout_t;
+
+typedef struct buffer_bind_layout_t {
     void *data;
-    
-    u32 binding;
-    u32 visibility;
     
     u32 buffer_id;
     u32 buffer_type;
@@ -203,6 +297,27 @@ typedef struct bind_layout_t {
     u32 count;
     u32 stride;
     u32 id_offset;
+} buffer_bind_layout_t;
+
+enum {
+    BINDING_TYPE_BUFFER,
+    BINDING_TYPE_TEXTURE,
+    BINDING_TYPE_STORAGE_TEXTURE,
+    BINDING_TYPE_SAMPLER
+};
+
+typedef struct bind_layout_t {
+    u32 type;
+    
+    u32 binding;
+    u32 visibility;
+    
+    union {
+        buffer_bind_layout_t buffer_layout;
+        texture_bind_layout_t texture_layout;
+        storage_texture_bind_layout_t storage_texture_layout;
+        sampler_bind_layout_t sampler_layout;
+    };
 } bind_layout_t;
 
 enum {
@@ -244,6 +359,10 @@ typedef struct compute_pipeline_t {
     
     u32 *bg_layout_ids;
     u32 bg_count;
+    
+    u32 workgroup_x;
+    u32 workgroup_y;
+    u32 workgroup_z;
 } compute_pipeline_t;
 
 typedef struct pipeline_submission_t {
@@ -258,6 +377,7 @@ typedef struct renderer_t {
     STACK(render_pipeline_t) *render_pipelines;
     STACK(compute_pipeline_t) *compute_pipelines;
     
+    STACK(texture_info_t) *textures;
     STACK(buffer_info_t) *buffers;
     STACK(vertex_buffer_layout_t) *vb_layouts;
     STACK(bind_group_layout_t) *bg_layouts;

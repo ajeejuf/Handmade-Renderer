@@ -214,13 +214,22 @@ free_wgpu(wgpu_renderer_t *wgpu)
         wgpu->bind_groups = NULL;
     }
     
-    if (wgpu->pipelines)
+    if (wgpu->render_pipelines)
     {
-        for (u32 i = 0; i < wgpu->pipeline_count; i++)
-            wgpuRenderPipelineRelease(wgpu->pipelines[i]);
+        for (u32 i = 0; i < wgpu->render_pipeline_count; i++)
+            wgpuRenderPipelineRelease(wgpu->render_pipelines[i]);
         
-        free(wgpu->pipelines);
-        wgpu->pipelines = NULL;
+        free(wgpu->render_pipelines);
+        wgpu->render_pipelines = NULL;
+    }
+    
+    if (wgpu->compute_pipelines)
+    {
+        for (u32 i = 0; i < wgpu->compute_pipeline_count; i++)
+            wgpuComputePipelineRelease(wgpu->compute_pipelines[i]);
+        
+        free(wgpu->compute_pipelines);
+        wgpu->compute_pipelines = NULL;
     }
     
     wgpuSurfaceRelease(wgpu->surface);
@@ -281,31 +290,50 @@ release_vertex_buffer_layouts(WGPUVertexBufferLayout *vb_layouts, u32 vb_count)
 }
 
 internal void
-set_bind_group_layout_entry(WGPUBindGroupLayoutEntry *entry)
+set_bind_group_layout_entry(renderer_t *rb, WGPUBindGroupLayoutEntry *entry, bind_layout_t *bind)
 {
-    WGPUBindGroupLayoutEntry res = {0};
-    res.buffer.nextInChain = NULL;
-    res.buffer.type = WGPUBufferBindingType_Undefined;
-    res.buffer.hasDynamicOffset = 0;
-    
-    res.sampler.nextInChain = NULL;
-    res.sampler.type = WGPUSamplerBindingType_Undefined;
-    
-    res.storageTexture.nextInChain = NULL;
-    res.storageTexture.access = WGPUStorageTextureAccess_Undefined;
-    res.storageTexture.format = WGPUTextureFormat_Undefined;
-    res.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
-    
-    res.texture.nextInChain = NULL;
-    res.texture.multisampled = 0;
-    res.texture.sampleType = WGPUTextureSampleType_Undefined;
-    res.texture.viewDimension = WGPUTextureViewDimension_Undefined;
-    
-    *entry = res;
+    switch(bind->type)
+    {
+        case BINDING_TYPE_BUFFER: {
+            buffer_bind_layout_t b_layout = bind->buffer_layout;
+            
+            entry->buffer.type = get_wgpu_buffer_type(b_layout.buffer_type);
+            
+            if (b_layout.has_dynamic_offset)
+                entry->buffer.minBindingSize = b_layout.aligned_size;
+            else
+                entry->buffer.minBindingSize = b_layout.aligned_size*b_layout.count;
+            
+            entry->buffer.hasDynamicOffset = b_layout.has_dynamic_offset;
+        } break;
+        
+        case BINDING_TYPE_TEXTURE: {
+            texture_bind_layout_t t_layout = bind->texture_layout;
+            texture_info_t *info = rb->textures + t_layout.id;
+            
+            entry->texture.sampleType = get_wgpu_texture_sample_type(info->format);
+            entry->texture.viewDimension = get_wgpu_texture_view_dim(info->dim_type);
+        } break;
+        
+        case BINDING_TYPE_STORAGE_TEXTURE: {
+            storage_texture_bind_layout_t st_layout = bind->storage_texture_layout;
+            texture_info_t *info = rb->textures + st_layout.id;
+            
+            entry->storageTexture.access = get_wgpu_texture_access(st_layout.access);
+            entry->storageTexture.format = get_wgpu_texture_format(info->format);
+            entry->storageTexture.viewDimension = get_wgpu_texture_view_dim(info->dim_type);
+        } break;
+        
+        case BINDING_TYPE_SAMPLER: {
+            sampler_bind_layout_t s_layout = bind->sampler_layout;
+            
+            entry->sampler.type = get_wgpu_sampler_type(s_layout.type);
+        } break;
+    }
 }
 
 internal WGPUBindGroupLayoutEntry *
-get_bind_group_layout_entries(bind_layout_t *bindings, u32 count)
+get_bind_group_layout_entries(renderer_t *rb, bind_layout_t *bindings, u32 count)
 {
     WGPUBindGroupLayoutEntry *binding_layouts = (WGPUBindGroupLayoutEntry *)malloc(sizeof(*binding_layouts)*count);
     memset(binding_layouts, 0, sizeof(*binding_layouts)*count);
@@ -317,25 +345,18 @@ get_bind_group_layout_entries(bind_layout_t *bindings, u32 count)
         entry = binding_layouts + b_idx;
         bind = bindings + b_idx;
         
-        set_bind_group_layout_entry(entry);
-        
         entry->binding = bind->binding;
         entry->visibility = get_wgpu_shader_visibility(bind->visibility);
-        entry->buffer.type = get_wgpu_buffer_type(bind->buffer_type);
         
-        if (bind->has_dynamic_offset)
-            entry->buffer.minBindingSize = (b_idx < count-1) ? bind[1].offset-bind[0].offset : bind->aligned_size;
-        else
-            entry->buffer.minBindingSize = (b_idx < count-1) ? bind[1].offset-bind[0].offset : bind->aligned_size*bind->count;
-        
-        entry->buffer.hasDynamicOffset = bind->has_dynamic_offset;
+        set_bind_group_layout_entry(rb, entry, bind);
     }
     
     return binding_layouts;
 }
 
 internal WGPUBindGroupLayout *
-get_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 count)
+get_bind_group_layouts(renderer_t *rb, wgpu_renderer_t *wgpu, 
+                       bind_group_layout_t *layouts, u32 count)
 {
     WGPUBindGroupLayout *res = (WGPUBindGroupLayout *)malloc(sizeof(*res)*count);
     
@@ -347,7 +368,7 @@ get_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 
         layout = layouts + bg_idx;
         bind_count = layout->count;
         
-        WGPUBindGroupLayoutEntry *binding_layouts = get_bind_group_layout_entries(layout->binds, layout->count);
+        WGPUBindGroupLayoutEntry *binding_layouts = get_bind_group_layout_entries(rb, layout->binds, layout->count);
         
         desc.nextInChain = NULL;
         desc.entryCount = bind_count;
@@ -372,8 +393,68 @@ release_bind_group_layouts(WGPUBindGroupLayout *bg_layouts, u32 bg_layout_count)
     free(bg_layouts);
 }
 
+internal void
+set_bind_group_entry(renderer_t *rb, wgpu_renderer_t *wgpu, 
+                     WGPUBindGroupEntry *entry, bind_layout_t *bind)
+{
+    switch(bind->type)
+    {
+        case BINDING_TYPE_BUFFER: {
+            buffer_bind_layout_t b_layout = bind->buffer_layout;
+            
+            entry->buffer = wgpu->buffers[b_layout.buffer_id];
+            entry->offset = b_layout.offset;
+            if (b_layout.has_dynamic_offset)
+                entry->size = b_layout.aligned_size;
+            else
+                entry->size = b_layout.aligned_size*b_layout.count;
+        } break;
+        
+        case BINDING_TYPE_TEXTURE: {
+            texture_bind_layout_t t_layout = bind->texture_layout;
+            texture_info_t *info = rb->textures + t_layout.id;
+            
+            WGPUTextureViewDescriptor desc = {0};
+            desc.aspect = WGPUTextureAspect_All;
+            desc.baseArrayLayer = 0;
+            desc.arrayLayerCount = 1;
+            desc.baseMipLevel = 0;
+            desc.mipLevelCount = info->mip_level_count;
+            desc.dimension = get_wgpu_texture_view_dim(info->dim_type);
+            desc.format = get_wgpu_texture_format(info->format);
+            
+            WGPUTextureView texture_view = wgpuTextureCreateView(wgpu->textures[t_layout.id], &desc);
+            entry->textureView = texture_view;
+        } break;
+        
+        case BINDING_TYPE_STORAGE_TEXTURE: {
+            storage_texture_bind_layout_t st_layout = bind->storage_texture_layout;
+            texture_info_t *info = rb->textures + st_layout.id;
+            
+            WGPUTextureViewDescriptor desc = {0};
+            desc.aspect = WGPUTextureAspect_All;
+            desc.baseArrayLayer = 0;
+            desc.arrayLayerCount = 1;
+            desc.baseMipLevel = 0;
+            desc.mipLevelCount = info->mip_level_count;
+            desc.dimension = get_wgpu_texture_view_dim(info->dim_type);
+            desc.format = get_wgpu_texture_format(info->format);
+            
+            WGPUTextureView texture_view = wgpuTextureCreateView(wgpu->textures[st_layout.id], &desc);
+            entry->textureView = texture_view;
+        } break;
+        
+        case BINDING_TYPE_SAMPLER: {
+            sampler_bind_layout_t s_layout = bind->sampler_layout;
+            
+            entry->sampler = wgpu->samplers[s_layout.id];
+        } break;
+    }
+}
+
 internal WGPUBindGroupEntry *
-get_bind_group_entries(wgpu_renderer_t *wgpu, bind_layout_t *bindings, u32 count)
+get_bind_group_entries(renderer_t *rb, wgpu_renderer_t *wgpu, 
+                       bind_layout_t *bindings, u32 count)
 {
     WGPUBindGroupEntry *entries = (WGPUBindGroupEntry *)malloc(sizeof(*entries)*count);
     memset(entries, 0, sizeof(*entries)*count);
@@ -387,19 +468,15 @@ get_bind_group_entries(wgpu_renderer_t *wgpu, bind_layout_t *bindings, u32 count
         
         entry->nextInChain = NULL;
         entry->binding = bind->binding;
-        entry->buffer = wgpu->buffers[bind->buffer_id];
-        entry->offset = bind->offset;
-        if (bind->has_dynamic_offset)
-            entry->size = (b_idx < count-1) ? bind[1].offset-bind[0].offset : bind->aligned_size;
-        else
-            entry->size = (b_idx < count-1) ? bind[1].offset-bind[0].offset : bind->aligned_size*bind->count;
+        
+        set_bind_group_entry(rb, wgpu, entry, bind);
     }
     
     return entries;
 }
 
 internal WGPUBindGroup *
-get_bind_groups(wgpu_renderer_t *wgpu,
+get_bind_groups(renderer_t *rb, wgpu_renderer_t *wgpu,
                 bind_group_layout_t *layouts, WGPUBindGroupLayout *bg_layouts,
                 u32 count)
 {
@@ -411,7 +488,7 @@ get_bind_groups(wgpu_renderer_t *wgpu,
     {
         layout = layouts + bg_idx;
         
-        WGPUBindGroupEntry *bind_group_entries = get_bind_group_entries(wgpu, layout->binds, layout->count);
+        WGPUBindGroupEntry *bind_group_entries = get_bind_group_entries(rb, wgpu, layout->binds, layout->count);
         
         WGPUBindGroupDescriptor desc = {0};
         desc.nextInChain = NULL;
@@ -440,12 +517,12 @@ release_bind_groups(WGPUBindGroup *bind_groups, u32 bg_count)
 }
 
 internal WGPURenderPipeline
-create_pipeline(wgpu_renderer_t *wgpu, 
-                render_pipeline_t *pipeline, 
-                vertex_buffer_layout_t *vb_layouts, 
-                WGPUBindGroupLayout *bind_group_layouts,
-                u32 bg_count,
-                WGPUShaderModule module)
+create_render_pipeline(wgpu_renderer_t *wgpu, 
+                       render_pipeline_t *pipeline, 
+                       vertex_buffer_layout_t *vb_layouts, 
+                       WGPUBindGroupLayout *bind_group_layouts,
+                       u32 bg_count,
+                       WGPUShaderModule module)
 {
     WGPURenderPipeline result;
     WGPURenderPipelineDescriptor desc = {0};
@@ -527,6 +604,40 @@ create_pipeline(wgpu_renderer_t *wgpu,
     return result;
 }
 
+internal WGPUComputePipeline
+create_compute_pipeline(wgpu_renderer_t *wgpu, 
+                        compute_pipeline_t *pipeline, 
+                        WGPUBindGroupLayout *bind_group_layouts,
+                        u32 bg_count,
+                        WGPUShaderModule module)
+{
+    WGPUComputePipeline result;
+    
+    u32 p_bg_count = pipeline->bg_count;
+    WGPUBindGroupLayout *p_bind_group_layouts = (WGPUBindGroupLayout *)malloc(sizeof(*p_bind_group_layouts)*p_bg_count);
+    
+    for (u32 bg_idx = 0; bg_idx < p_bg_count; bg_idx++)
+        p_bind_group_layouts[bg_idx] = bind_group_layouts[pipeline->bg_layout_ids[bg_idx]];
+    
+    WGPUPipelineLayoutDescriptor layout_desc = {0};
+    layout_desc.nextInChain = NULL;
+    layout_desc.bindGroupLayoutCount = p_bg_count;
+    layout_desc.bindGroupLayouts = p_bind_group_layouts;
+    
+    WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(wgpu->device, &layout_desc);
+    
+    WGPUComputePipelineDescriptor desc = {0};
+    desc.compute.entryPoint = make_wgpu_str("cs_main");
+    desc.compute.module = module;
+    desc.layout = layout;
+    
+    result = wgpuDeviceCreateComputePipeline(wgpu->device, &desc);
+    
+    wgpuPipelineLayoutRelease(layout);
+    
+    return result;
+}
+
 internal WGPUBuffer
 create_buffer(wgpu_renderer_t *wgpu, u64 size, u32 usage)
 {
@@ -593,24 +704,98 @@ create_buffers(wgpu_renderer_t *wgpu, buffer_info_t *info, u32 count)
     return res;
 }
 
-internal void
-init_wgpu_pipeline(wgpu_renderer_t *wgpu, 
-                   render_pipeline_t *pipelines, vertex_buffer_layout_t *vb_layouts,
-                   WGPUBindGroupLayout *bind_group_layouts, u32 bg_count,
-                   WGPUShaderModule *modules, u32 module_count)
+internal WGPUTexture
+create_texture(wgpu_renderer_t *wgpu, texture_info_t info)
 {
-    wgpu->pipeline_count = module_count;
-    wgpu->pipelines = (WGPURenderPipeline *)malloc(sizeof(*wgpu->pipelines)*module_count);
+    WGPUTextureDescriptor desc = {0};
+    desc.nextInChain = NULL;
+    desc.dimension = get_wgpu_texture_dim(info.dim_type);
+    
+    memcpy(&desc.size, info.size, sizeof(*info.size)*3);
+    
+    desc.mipLevelCount = info.mip_level_count;
+    desc.sampleCount = info.sample_count;
+    desc.format = get_wgpu_texture_format(info.format);
+    desc.usage = get_wgpu_texture_usage(info.usage);
+    
+    return wgpuDeviceCreateTexture(wgpu->device, &desc);
+}
+
+internal void
+write_to_texture(wgpu_renderer_t *wgpu, WGPUTexture texture, texture_info_t info)
+{
+    WGPUImageCopyTexture dst;
+    dst.texture = texture;
+    
+    // TODO(ajeej): dont hard code these values if they are useful
+    dst.mipLevel = 0;
+    dst.origin = (WGPUOrigin3D) { 0, 0, 0 };
+    dst.aspect = WGPUTextureAspect_All;
+    
+    u32 bytes_per_pixel = get_wgpu_bytes_per_pixel(info.format);
+    
+    WGPUTextureDataLayout src;
+    src.bytesPerRow =  bytes_per_pixel * info.size[0];
+    src.rowsPerImage = info.size[1];
+    
+    u64 size = bytes_per_pixel * info.size[0] * info.size[1];
+    wgpuQueueWriteTexture(wgpu->queue, &dst, info.data, size, 
+                          &src, (WGPUExtent3D *)info.size);
+}
+
+internal WGPUTexture *
+create_textures(wgpu_renderer_t *wgpu, texture_info_t *info, u32 count)
+{
+    WGPUTexture *res = (WGPUTexture *)malloc(sizeof(*res)*count);
+    
+    for (u32 t_idx = 0; t_idx < count; t_idx++) {
+        res[t_idx] = create_texture(wgpu, info[t_idx]);
+        write_to_texture(wgpu, res[t_idx], info[t_idx]);
+    }
+    
+    return res;
+}
+
+internal void
+init_render_pipelines(wgpu_renderer_t *wgpu, 
+                      render_pipeline_t *pipelines, u32 pipeline_count,
+                      vertex_buffer_layout_t *vb_layouts,
+                      WGPUBindGroupLayout *bind_group_layouts, u32 bg_count,
+                      WGPUShaderModule *modules, u32 module_count)
+{
+    wgpu->render_pipeline_count = pipeline_count;
+    wgpu->render_pipelines = (WGPURenderPipeline *)malloc(sizeof(*wgpu->render_pipelines)*pipeline_count);
     
     vertex_buffer_layout_t *layout;
     render_pipeline_t *pipeline;
-    for (u32 p_idx = 0; p_idx < module_count; p_idx++)
+    for (u32 p_idx = 0; p_idx < pipeline_count; p_idx++)
     {
         pipeline = pipelines + p_idx;
         
-        wgpu->pipelines[p_idx] = create_pipeline(wgpu, pipeline, vb_layouts, 
-                                                 bind_group_layouts, bg_count,
-                                                 modules[p_idx]);
+        wgpu->render_pipelines[p_idx] = create_render_pipeline(wgpu, pipeline, vb_layouts, 
+                                                               bind_group_layouts, bg_count,
+                                                               modules[pipeline->shader_id]);
+    }
+}
+
+internal void
+init_compute_pipelines(wgpu_renderer_t *wgpu,
+                       compute_pipeline_t *pipelines, u32 pipeline_count,
+                       WGPUBindGroupLayout *bind_group_layouts, u32 bg_count,
+                       WGPUShaderModule *modules, u32 module_count)
+{
+    wgpu->compute_pipeline_count = pipeline_count;
+    wgpu->compute_pipelines = (WGPUComputePipeline *)malloc(sizeof(*wgpu->compute_pipelines)*pipeline_count);
+    
+    vertex_buffer_layout_t *layout;
+    compute_pipeline_t *pipeline;
+    for (u32 p_idx = 0; p_idx < pipeline_count; p_idx++)
+    {
+        pipeline = pipelines + p_idx;
+        
+        wgpu->compute_pipelines[p_idx] = create_compute_pipeline(wgpu, pipeline,
+                                                                 bind_group_layouts, bg_count,
+                                                                 modules[pipeline->shader_id]);
     }
 }
 
@@ -652,6 +837,7 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
     
     bind_group_layout_t *layout;
     bind_layout_t *bind;
+    buffer_bind_layout_t *b_layout;
     for (u32 l_idx = 0; l_idx < count; l_idx++)
     {
         layout = layouts + l_idx;
@@ -659,15 +845,18 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
         for (u32 b_idx = 0; b_idx < layout->count; b_idx++)
         {
             bind = layout->binds + b_idx;
+            if (bind->type != BINDING_TYPE_BUFFER) continue;
             
-            bind->offset = b_offsets[bind->buffer_id];
-            bind->stride = align_offset(bind->size, alignment);
-            bind->aligned_size = align_offset(bind->size, 16);
+            b_layout = &bind->buffer_layout;
             
-            if (bind->has_dynamic_offset)
-                b_offsets[bind->buffer_id] = bind->offset + bind->stride*bind->count;
+            b_layout->offset = b_offsets[b_layout->buffer_id];
+            b_layout->stride = align_offset(b_layout->size, alignment);
+            b_layout->aligned_size = align_offset(b_layout->size, 16);
+            
+            if (b_layout->has_dynamic_offset)
+                b_offsets[b_layout->buffer_id] = b_layout->offset + b_layout->stride*b_layout->count;
             else
-                b_offsets[bind->buffer_id] = bind->offset + align_offset(bind->aligned_size*bind->count, alignment);
+                b_offsets[b_layout->buffer_id] = b_layout->offset + align_offset(b_layout->aligned_size*b_layout->count, alignment);
         }
     }
     
@@ -678,7 +867,7 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
 }
 
 internal void
-write_bind_layout(wgpu_renderer_t *wgpu, bind_layout_t *binding)
+write_buffer_bind_layout(wgpu_renderer_t *wgpu, buffer_bind_layout_t *binding)
 {
     WGPUBuffer buffer = wgpu->buffers[binding->buffer_id];
     
@@ -704,7 +893,7 @@ write_bind_layout(wgpu_renderer_t *wgpu, bind_layout_t *binding)
 }
 
 internal void
-write_data_to_buffers(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 count)
+write_bind_layout_data(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 count)
 {
     bind_layout_t *bind;
     bind_group_layout_t *layout;
@@ -716,78 +905,32 @@ write_data_to_buffers(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 c
         {
             bind = layout->binds + b_idx;
             
-            write_bind_layout(wgpu, bind);
+            switch(bind->type)
+            {
+                case BINDING_TYPE_BUFFER: {
+                    buffer_bind_layout_t *buffer_bind = &bind->buffer_layout;
+                    write_buffer_bind_layout(wgpu, buffer_bind);
+                } break;
+                
+                default: {
+                    continue;//ASSERT_LOG(0, "Invalid binding type for writing data");
+                } break;
+            }
         }
     }
 }
 
-INIT_RENDERER(init_renderer)
-{
-    wgpu_renderer_t *wgpu = (wgpu_renderer_t *)malloc(sizeof(*wgpu));
-    
-    // NOTE(ajeej): Initialize WGPU
-    init_wgpu(wgpu, window);
-    
-    // NOTE(ajeej): Compile shaders
-    u32 pipeline_count = get_stack_count(am->shader_assets);
-    WGPUShaderModule *shader_modules = create_shader_modules(wgpu, am->shader_assets, 
-                                                             pipeline_count);
-    
-    
-    // NOTE(ajeej): Process the bind group layouts
-    wgpu->bg_count = get_stack_count(rb->bg_layouts);
-    wgpu->b_count = get_stack_count(rb->buffers);
-    process_bind_group_layouts(wgpu, rb->bg_layouts, wgpu->bg_count,
-                               rb->buffers, wgpu->b_count);
-    
-    
-    WGPUBindGroupLayout *bind_group_layouts = get_bind_group_layouts(wgpu, rb->bg_layouts, wgpu->bg_count);
-    
-    
-    // NOTE(ajeej): Creeate pipelines
-    init_wgpu_pipeline(wgpu, rb->render_pipelines, rb->vb_layouts,
-                       bind_group_layouts, wgpu->bg_count,
-                       shader_modules, pipeline_count);
-    
-    
-    // NOTE(ajeej): Create buffers
-    wgpu->vb_count = get_stack_count(rb->vb_layouts);
-    wgpu->vertex_buffers = create_vertex_buffers(wgpu, rb->vb_layouts, wgpu->vb_count);
-    
-    wgpu->index_buffer = create_buffer(wgpu, get_stack_size(rb->indices),
-                                       WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index);
-    wgpuQueueWriteBuffer(wgpu->queue, wgpu->index_buffer, 0, rb->indices, get_stack_size(rb->indices));
-    
-    
-    
-    wgpu->buffers = create_buffers(wgpu,rb->buffers, wgpu->b_count);
-    
-    
-    wgpu->bind_groups = get_bind_groups(wgpu, rb->bg_layouts, bind_group_layouts, wgpu->bg_count);
-    
-    write_data_to_buffers(wgpu, rb->bg_layouts, wgpu->bg_count);
-    
-    rb->api = (void *)wgpu;
-}
 
-START_FRAME(start_frame)
+internal void
+submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
 {
-    wgpu_renderer_t *wgpu = (wgpu_renderer_t *)rb->api;
-    
-    wgpu->target_view = get_next_surface_texture_view(wgpu->surface);
-    ASSERT_LOG(wgpu->target_view, "Failed to get target view!");
-    
-    WGPUCommandEncoderDescriptor encoder_desc = {0};
-    encoder_desc.nextInChain = NULL;
-    encoder_desc.label = make_wgpu_str("Command Encoder");
-    
-    wgpu->encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, &encoder_desc);
-    
+    render_pipeline_t *p_info = rb->render_pipelines + p_id;
     
     WGPURenderPassDescriptor render_pass_desc = {0};
     render_pass_desc.nextInChain = NULL;
     
     WGPURenderPassColorAttachment render_pass_color_attachment = {0};
+    
     render_pass_color_attachment.view = wgpu->target_view;
     render_pass_color_attachment.resolveTarget = NULL;
     render_pass_color_attachment.loadOp = WGPULoadOp_Clear;
@@ -800,95 +943,210 @@ START_FRAME(start_frame)
     render_pass_desc.depthStencilAttachment = NULL;
     render_pass_desc.timestampWrites = NULL;
     
-    wgpu->render_pass = wgpuCommandEncoderBeginRenderPass(wgpu->encoder, &render_pass_desc);
+    WGPURenderPassEncoder render_pass = wgpuCommandEncoderBeginRenderPass(wgpu->encoder, &render_pass_desc);
+    
+    wgpuRenderPassEncoderSetPipeline(render_pass, wgpu->render_pipelines[p_id]);
+    
+    // NOTE(ajeej): Set Vertex Buffers and Index Buffer;
+    
+    WGPUBuffer *vertex_buffer;
+    u32 vertex_buffer_count = p_info->vb_count;
+    for (u32 v_idx = 0; v_idx < vertex_buffer_count; v_idx++) {
+        vertex_buffer = wgpu->vertex_buffers + p_info->vb_layout_ids[v_idx];
+        wgpuRenderPassEncoderSetVertexBuffer(render_pass, v_idx,
+                                             *vertex_buffer, 0,
+                                             wgpuBufferGetSize(*vertex_buffer));
+    }
+    
+    wgpuRenderPassEncoderSetIndexBuffer(render_pass, wgpu->index_buffer,
+                                        WGPUIndexFormat_Uint32, 0,
+                                        wgpuBufferGetSize(wgpu->index_buffer));
+    
+    
+    // NOTE(ajeej): Set bind groups that update every frame
+    
+    u32 bg_frame_count = get_stack_count(p_info->bg_frame_ids);
+    for (u32 bg_idx = 0; bg_idx < bg_frame_count; bg_idx++)
+    {
+        u32 idx = p_info->bg_frame_ids[bg_idx];
+        wgpuRenderPassEncoderSetBindGroup(render_pass, bg_idx,
+                                          wgpu->bind_groups[idx],
+                                          0, NULL);
+    }
+    
+    
+    u32 strides[16];
+    u32 stride_count = 0;
+    
+    render_cmd_t *cmd = NULL;
+    u32 cmd_count = get_stack_count(p_info->cmds);
+    for (u32 c_idx = 0; c_idx < cmd_count; c_idx++) {
+        cmd = p_info->cmds + c_idx;
+        
+        
+        // NOTE(ajeej): Set bind groups that update every draw call
+        //              practically these are only dynamic in nature
+        
+        u32 bg_count = get_stack_count(p_info->bg_draw_ids);
+        bind_group_layout_t *layout;
+        bind_layout_t *bind;
+        buffer_bind_layout_t *buffer_bind;
+        for (u32 bg_idx = 0; bg_idx < bg_count; bg_idx++)
+        {
+            u32 idx = p_info->bg_draw_ids[bg_idx];
+            layout = rb->bg_layouts + idx;
+            
+            for (u32 b_idx = 0; b_idx < layout->count; b_idx++)
+            {
+                bind = layout->binds + b_idx;
+                if (bind->type != BINDING_TYPE_BUFFER) continue;
+                buffer_bind = &bind->buffer_layout;
+                
+                u32 id = *(u32 *)((u8 *)cmd + buffer_bind->id_offset);
+                strides[stride_count++] = buffer_bind->stride * id;
+            }
+            
+            wgpuRenderPassEncoderSetBindGroup(render_pass, idx,
+                                              wgpu->bind_groups[idx],
+                                              stride_count, strides);
+            
+            stride_count = 0;
+        }
+        
+        mesh_info_t m_info = rb->meshes[cmd->mesh_id];
+        wgpuRenderPassEncoderDrawIndexed(render_pass, m_info.indices_count, 1,
+                                         m_info.indices_idx, 0, 0);
+    }
+    
+    stack_clear(p_info->cmds);
+    
+    wgpuRenderPassEncoderEnd(render_pass);
+}
+
+internal void
+submit_compute_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
+{
+    compute_pipeline_t *p_info = rb->compute_pipelines + p_id;
+    
+    WGPUComputePassDescriptor desc = {0};
+    desc.nextInChain = NULL;
+    desc.timestampWrites = NULL;
+    WGPUComputePassEncoder compute_pass = wgpuCommandEncoderBeginComputePass(wgpu->encoder, &desc);
+    
+    wgpuComputePassEncoderSetPipeline(compute_pass, wgpu->compute_pipelines[p_id]);
+    
+    for (u32 bg_idx = 0; bg_idx < p_info->bg_count; bg_idx++)
+    {
+        u32 idx = p_info->bg_layout_ids[bg_idx];
+        wgpuComputePassEncoderSetBindGroup(compute_pass, bg_idx,
+                                           wgpu->bind_groups[idx],
+                                           0, NULL);
+    }
+    
+    wgpuComputePassEncoderDispatchWorkgroups(compute_pass,
+                                             p_info->workgroup_x,
+                                             p_info->workgroup_y,
+                                             p_info->workgroup_z);
+    
+    wgpuComputePassEncoderEnd(compute_pass);
+}
+
+INIT_RENDERER(init_renderer)
+{
+    wgpu_renderer_t *wgpu = (wgpu_renderer_t *)malloc(sizeof(*wgpu));
+    
+    // NOTE(ajeej): Initialize WGPU
+    init_wgpu(wgpu, window);
+    
+    // NOTE(ajeej): Compile shaders
+    u32 module_count = get_stack_count(am->shader_assets);
+    WGPUShaderModule *shader_modules = create_shader_modules(wgpu, am->shader_assets, 
+                                                             module_count);
+    
+    
+    // NOTE(ajeej): Process the bind group layouts
+    wgpu->bg_count = get_stack_count(rb->bg_layouts);
+    wgpu->b_count = get_stack_count(rb->buffers);
+    process_bind_group_layouts(wgpu, rb->bg_layouts, wgpu->bg_count,
+                               rb->buffers, wgpu->b_count);
+    
+    
+    WGPUBindGroupLayout *bind_group_layouts = get_bind_group_layouts(rb, wgpu, rb->bg_layouts, wgpu->bg_count);
+    
+    
+    // NOTE(ajeej): Create render pipelines
+    u32 render_pipeline_count = get_stack_count(rb->render_pipelines);
+    init_render_pipelines(wgpu, rb->render_pipelines, render_pipeline_count,
+                          rb->vb_layouts,
+                          bind_group_layouts, wgpu->bg_count,
+                          shader_modules, module_count);
+    
+    // NOTE(ajeej): Create compute pipelines
+    u32 compute_pipeline_count = get_stack_count(rb->compute_pipelines);
+    init_compute_pipelines(wgpu, rb->compute_pipelines, compute_pipeline_count,
+                           bind_group_layouts, wgpu->bg_count,
+                           shader_modules, module_count);
+    
+    
+    // NOTE(ajeej): Create buffers
+    wgpu->vb_count = get_stack_count(rb->vb_layouts);
+    wgpu->vertex_buffers = create_vertex_buffers(wgpu, rb->vb_layouts, wgpu->vb_count);
+    
+    wgpu->index_buffer = create_buffer(wgpu, get_stack_size(rb->indices),
+                                       WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index);
+    wgpuQueueWriteBuffer(wgpu->queue, wgpu->index_buffer, 0, rb->indices, get_stack_size(rb->indices));
+    
+    wgpu->buffers = create_buffers(wgpu,rb->buffers, wgpu->b_count);
+    
+    wgpu->t_count = get_stack_count(rb->textures);
+    wgpu->textures = create_textures(wgpu, rb->textures, wgpu->t_count);
+    
+    // NOTE(ajeej): Create bind groups
+    wgpu->bind_groups = get_bind_groups(rb, wgpu, rb->bg_layouts, bind_group_layouts, wgpu->bg_count);
+    
+    write_bind_layout_data(wgpu, rb->bg_layouts, wgpu->bg_count);
+    
+    rb->api = (void *)wgpu;
+}
+
+START_FRAME(start_frame)
+{
+    wgpu_renderer_t *wgpu = (wgpu_renderer_t *)rb->api;
+    
+    WGPUCommandEncoderDescriptor encoder_desc = {0};
+    encoder_desc.nextInChain = NULL;
+    encoder_desc.label = make_wgpu_str("Command Encoder");
+    
+    wgpu->target_view = get_next_surface_texture_view(wgpu->surface);
+    ASSERT_LOG(wgpu->target_view, "Failed to get target view!");
+    
+    wgpu->encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, &encoder_desc);
 }
 
 END_FRAME(end_frame)
 {
     wgpu_renderer_t *wgpu = (wgpu_renderer_t *)rb->api;
     
-    WGPURenderPassEncoder render_pass = wgpu->render_pass;
+    u32 p_submit_count = get_stack_count(rb->p_submit);
+    pipeline_submission_t *p_submit;
     
-    u32 strides[16];
-    u32 stride_count = 0;
-    
-    for (u32 p_idx = 0; p_idx < wgpu->pipeline_count; p_idx++)
+    for (u32 s_idx = 0; s_idx < p_submit_count; s_idx++)
     {
-        render_pipeline_t *pipeline = rb->render_pipelines + p_idx;
+        p_submit = rb->p_submit + s_idx;
         
-        wgpuRenderPassEncoderSetPipeline(render_pass, wgpu->pipelines[p_idx]);
-        
-        
-        // NOTE(ajeej): Set Vertex Buffers and Index Buffer;
-        
-        WGPUBuffer *vertex_buffer;
-        u32 vertex_buffer_count = pipeline->vb_count;
-        for (u32 v_idx = 0; v_idx < vertex_buffer_count; v_idx++) {
-            vertex_buffer = wgpu->vertex_buffers + pipeline->vb_layout_ids[v_idx];
-            wgpuRenderPassEncoderSetVertexBuffer(render_pass, v_idx,
-                                                 *vertex_buffer, 0,
-                                                 wgpuBufferGetSize(*vertex_buffer));
-        }
-        
-        wgpuRenderPassEncoderSetIndexBuffer(render_pass, wgpu->index_buffer,
-                                            WGPUIndexFormat_Uint32, 0,
-                                            wgpuBufferGetSize(wgpu->index_buffer));
-        
-        
-        // NOTE(ajeej): Set bind groups that update every frame
-        
-        u32 bg_frame_count = get_stack_count(pipeline->bg_frame_ids);
-        for (u32 bg_idx = 0; bg_idx < bg_frame_count; bg_idx++)
+        switch (p_submit->type)
         {
-            u32 idx = pipeline->bg_frame_ids[bg_idx];
-            wgpuRenderPassEncoderSetBindGroup(render_pass, idx,
-                                              wgpu->bind_groups[idx],
-                                              0, NULL);
+            case PIPELINE_TYPE_RENDER: {
+                submit_render_pipeline(rb, wgpu, p_submit->id);
+            } break;
+            
+            case PIPELINE_TYPE_COMPUTE: {
+                submit_compute_pipeline(rb, wgpu, p_submit->id);
+            } break;
         }
-        
-        render_cmd_t *cmd = NULL;
-        u32 cmd_count = get_stack_count(pipeline->cmds);
-        for (u32 c_idx = 0; c_idx < cmd_count; c_idx++) {
-            cmd = pipeline->cmds + c_idx;
-            
-            
-            // NOTE(ajeej): Set bind groups that update every draw call
-            //              practically these are only dynamic in nature
-            
-            u32 bg_count = get_stack_count(pipeline->bg_draw_ids);
-            bind_group_layout_t *layout;
-            bind_layout_t *bind;
-            for (u32 bg_idx = 0; bg_idx < bg_count; bg_idx++)
-            {
-                u32 idx = pipeline->bg_draw_ids[bg_idx];
-                layout = rb->bg_layouts + idx;
-                
-                for (u32 b_idx = 0; b_idx < layout->count; b_idx++)
-                {
-                    bind = layout->binds + b_idx;
-                    
-                    u32 id = *(u32 *)((u8 *)cmd + bind->id_offset);
-                    strides[stride_count++] = bind->stride * id;
-                }
-                
-                wgpuRenderPassEncoderSetBindGroup(render_pass, idx,
-                                                  wgpu->bind_groups[idx],
-                                                  stride_count, strides);
-                
-                stride_count = 0;
-            }
-            
-            mesh_info_t m_info = rb->meshes[cmd->mesh_id];
-            wgpuRenderPassEncoderDrawIndexed(render_pass, m_info.indices_count, 1,
-                                             m_info.indices_idx, 0, 0);
-        }
-        
-        stack_clear(pipeline->cmds);
     }
     
-    wgpuRenderPassEncoderEnd(render_pass);
-    wgpuRenderPassEncoderRelease(render_pass);
-    
+    stack_clear(rb->p_submit);
     
     WGPUCommandBufferDescriptor cmd_buffer_desc = {0};
     cmd_buffer_desc.nextInChain = NULL;
@@ -901,7 +1159,6 @@ END_FRAME(end_frame)
     wgpuQueueSubmit(wgpu->queue, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
     LOG("Command submitted.");
-    
     
     wgpuTextureViewRelease(wgpu->target_view);
     wgpuSurfacePresent(wgpu->surface);

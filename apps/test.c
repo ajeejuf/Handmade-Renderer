@@ -37,30 +37,30 @@ INIT_APP(init_app)
     
     u32 s_id = add_shader(rb, am, "shader.wgsl");
     
-    u32 c_id = add_shader(rb, am, "compute.wgsl");
+    //u32 c_id = add_shader(rb, am, "compute.wgsl");
     
     mesh_id = create_triangle(rb, HMM_V4(0.0f, 0.0f, 1.0f, 1.0f));
     
     u32 vb_id = add_vertex_buffer(rb, rb->verts, get_stack_count(rb->verts),
                                   ATTRIBUTE_VERTEX, 0, MODE_VERTEX);
     
-    color0 = HMM_V3(1.0f, 0.0f, 0.0f);
+    color0 = HMM_V3(0.0f, 0.0f, 0.0f);
     color1 = HMM_V3(0.0f, 0.0f, 1.0f);
     
     bind_layout_t layouts[4];
-    layouts[0] = get_bind_layout_for_struct(&color0, 0, SHADER_VISIBILITY_VERTEX,
-                                            ub_ids[0], BUFFER_TYPE_UNIFORM);
-    layouts[1] = get_bind_layout_for_struct(&color1, 1, SHADER_VISIBILITY_VERTEX,
-                                            ub_ids[0], BUFFER_TYPE_UNIFORM);
+    layouts[0] = get_buffer_bind_layout_for_struct(&color0, 0, SHADER_VISIBILITY_VERTEX,
+                                                   ub_ids[0], BUFFER_TYPE_UNIFORM);
+    layouts[1] = get_buffer_bind_layout_for_struct(&color1, 1, SHADER_VISIBILITY_VERTEX,
+                                                   ub_ids[0], BUFFER_TYPE_UNIFORM);
     
-    layouts[2] = get_dynamic_bind_layout_for_struct(offsetx, ARRAY_COUNT(offsetx),
-                                                    0, SHADER_VISIBILITY_VERTEX,
-                                                    ub_ids[1], BUFFER_TYPE_UNIFORM,
-                                                    offsetof(render_cmd_t, trans_id));
-    layouts[3] = get_dynamic_bind_layout_for_struct(offsety, ARRAY_COUNT(offsety),
-                                                    1, SHADER_VISIBILITY_VERTEX,
-                                                    ub_ids[1], BUFFER_TYPE_UNIFORM,
-                                                    offsetof(render_cmd_t, mat_id));
+    layouts[2] = get_dynamic_buffer_bind_layout_for_struct(offsetx, ARRAY_COUNT(offsetx),
+                                                           0, SHADER_VISIBILITY_VERTEX,
+                                                           ub_ids[1], BUFFER_TYPE_UNIFORM,
+                                                           offsetof(render_cmd_t, trans_id));
+    layouts[3] = get_dynamic_buffer_bind_layout_for_struct(offsety, ARRAY_COUNT(offsety),
+                                                           1, SHADER_VISIBILITY_VERTEX,
+                                                           ub_ids[1], BUFFER_TYPE_UNIFORM,
+                                                           offsetof(render_cmd_t, mat_id));
     
     u32 bg_ids[2];
     bg_ids[0] = add_bind_group(rb, layouts, 2, BIND_GROUP_TYPE_FRAME);
@@ -68,7 +68,7 @@ INIT_APP(init_app)
     
     id = add_render_pipeline(rb, s_id, &vb_id, 1, bg_ids, 2);
     
-    c_id = add_compute_pipeline(0, 0, 0, 0);
+    //c_id = add_compute_pipeline(0, 0, 0, 0);
 }
 
 UPDATE_AND_RENDER(update_and_render)

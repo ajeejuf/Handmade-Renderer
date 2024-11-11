@@ -1,15 +1,4 @@
 
-/*#define create_triangle(_r, _c) \
-__create_triangle(_r, _c, 0);
-
-#define create_cube(_r, _c) \
-__create_cube(_r, _c, 0)
-
-#define create_sphere(_r, _st, _sl, _c) \
-__create_sphere(_r, _st, _sl, _c, 0)
-
-#define create_icosahedron(_r, _c) \
-__create_icosahedron(_r, _c, 0)*/
 
 internal u32
 create_triangle(renderer_t *rb, v4 color)
@@ -42,6 +31,49 @@ create_triangle(renderer_t *rb, v4 color)
     indices[0] = 0;
     indices[1] = 1;
     indices[2] = 2;
+    
+    return id;
+}
+
+internal u32
+create_quad(renderer_t *rb, v4 color)
+{
+    vertex_t *verts = stack_push_array(&rb->verts, 4);
+    verts[0] = (vertex_t) {
+        HMM_V3(-0.5f, -0.5f, 0.0f),
+        HMM_V3(0.0f, 0.0f, 1.0f),
+        HMM_V2(0.0f, 0.0f),
+        color
+    };
+    verts[1] = (vertex_t) {
+        HMM_V3(0.5f, -0.5f, 0.0f),
+        HMM_V3(0.0f, 0.0f, 1.0f),
+        HMM_V2(1.0f, 0.0f),
+        color
+    };
+    verts[2] = (vertex_t) {
+        HMM_V3(0.5f, 0.5f, 0.0f),
+        HMM_V3(0.0f, 0.0f, 1.0f),
+        HMM_V2(1.0f, 1.0f),
+        color
+    };
+    verts[3] = (vertex_t) {
+        HMM_V3(-0.5f, 0.5f, 0.0f),
+        HMM_V3(0.0f, 0.0f, 1.0f),
+        HMM_V2(0.0f, 1.0f),
+        color
+    };
+    
+    u32 id = push_mesh_info(rb, 6, PRIMITIVE_TRIANGLES);
+    
+    u32 *indices = stack_push_array(&rb->indices, 6);
+    indices[0] = 0;
+    indices[1] = 1;
+    indices[2] = 2;
+    
+    indices[3] = 0;
+    indices[4] = 2;
+    indices[5] = 3;
     
     return id;
 }
@@ -439,55 +471,3 @@ create_icosahedron(renderer_t *rb, v4 color)
     
     return id;
 }
-
-/*internal u32
-create_triangle_instance(renderer_t *rb, color_t color, u32 count)
-{
-    u32 id = get_stack_count(rb->va);
-    vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0, sizeof(*va));
-    
-    u32 mesh_id = __create_triangle(rb, color, id);
-    init_instance(&va->mesh_instance, mesh_id, count);
-    
-    return id;
-}
-
-internal u32
-create_cube_instance(renderer_t *rb, color_t color, u32 count)
-{
-    u32 id = get_stack_count(rb->va);
-    vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0, sizeof(*va));
-    
-    u32 mesh_id = __create_cube(rb, color, id);
-    init_instance(&va->mesh_instance, mesh_id, count);
-    
-    return id;
-}
-
-internal u32
-create_sphere_instance(renderer_t *rb, u32 stacks, u32 slices, color_t color, u32 count)
-{
-    u32 id = get_stack_count(rb->va);
-    vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0, sizeof(*va));
-    
-    u32 mesh_id = __create_sphere(rb, stacks, slices, color, id);
-    init_instance(&va->mesh_instance, mesh_id, count);
-    
-    return id;
-}
-
-internal u32
-create_icosahedron_instance(renderer_t *rb, color_t color, u32 count)
-{
-    u32 id = get_stack_count(rb->va);
-    vertex_array_t *va = stack_push(&rb->va);
-    memset(va, 0, sizeof(*va));
-    
-    u32 mesh_id = __create_icosahedron(rb, color, id);
-    init_instance(&va->mesh_instance, mesh_id, count);
-    
-    return id;
-}*/

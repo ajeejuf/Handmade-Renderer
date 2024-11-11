@@ -300,6 +300,9 @@ get_wgpu_shader_visibility(u32 visibility)
     if (visibility & SHADER_VISIBILITY_FRAGMENT)
         res |= WGPUShaderStage_Fragment;
     
+    if (visibility & SHADER_VISIBILITY_COMPUTE)
+        res |= WGPUShaderStage_Compute;
+    
     return res;
 }
 
@@ -362,4 +365,366 @@ get_wgpu_buffer_usage(u32 usage)
         res |= WGPUBufferUsage_QueryResolve;
     
     return res;
+}
+
+internal u32
+get_wgpu_bytes_per_pixel(u32 format)
+{
+    switch(format)
+    {
+        case TEXTURE_FORMAT_R8U_NORM: 
+        case TEXTURE_FORMAT_R8S_NORM:
+        case TEXTURE_FORMAT_R8U_INT:
+        case TEXTURE_FORMAT_R8S_INT: {
+            return 1;
+        } break;
+        
+        case TEXTURE_FORMAT_R16U_INT :
+        case TEXTURE_FORMAT_R16S_INT :
+        case TEXTURE_FORMAT_R16_FLOAT :
+        case TEXTURE_FORMAT_RG8U_NORM :
+        case TEXTURE_FORMAT_RG8S_NORM :
+        case TEXTURE_FORMAT_RG8U_INT :
+        case TEXTURE_FORMAT_RG8S_INT : {
+            return 2;
+        } break;
+        
+        case TEXTURE_FORMAT_R32U_INT :
+        case TEXTURE_FORMAT_R32S_INT :
+        case TEXTURE_FORMAT_R32_FLOAT :
+        case TEXTURE_FORMAT_RG16U_INT :
+        case TEXTURE_FORMAT_RG16S_INT :
+        case TEXTURE_FORMAT_RG16_FLOAT :
+        case TEXTURE_FORMAT_RGBA8U_NORM :
+        case TEXTURE_FORMAT_RGBA8S_NORM :
+        case TEXTURE_FORMAT_RGBA8U_INT :
+        case TEXTURE_FORMAT_RGBA8S_INT : {
+            return 4;
+        } break;
+        
+        case TEXTURE_FORMAT_RG32U_INT :
+        case TEXTURE_FORMAT_RG32S_INT :
+        case TEXTURE_FORMAT_RG32_FLOAT :
+        case TEXTURE_FORMAT_RGBA16U_INT :
+        case TEXTURE_FORMAT_RGBA16S_INT :
+        case TEXTURE_FORMAT_RGBA16_FLOAT : {
+            return 8;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA32U_INT :
+        case TEXTURE_FORMAT_RGBA32S_INT :
+        case TEXTURE_FORMAT_RGBA32_FLOAT : {
+            return 16;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Texture format.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_texture_usage(u32 usage)
+{
+    u32 res = 0;
+    
+    if (usage & TEXTURE_USAGE_COPY_SRC)
+        res |= WGPUTextureUsage_CopySrc;
+    if (usage & TEXTURE_USAGE_COPY_DST)
+        res |= WGPUTextureUsage_CopyDst;
+    if (usage & TEXTURE_USAGE_TEXTURE_BINDING)
+        res |= WGPUTextureUsage_TextureBinding;
+    if (usage & TEXTURE_USAGE_STORAGE_BINDING)
+        res |= WGPUTextureUsage_StorageBinding;
+    if (usage & TEXTURE_USAGE_RENDER_ATTACHMENT)
+        res |= WGPUTextureUsage_RenderAttachment;
+    
+    return res;
+}
+
+internal u32
+get_wgpu_texture_dim(u32 type)
+{
+    switch (type)
+    {
+        case TEXTURE_DIM_1D: {
+            return WGPUTextureDimension_1D;
+        } break;
+        
+        case TEXTURE_DIM_2D: {
+            return WGPUTextureDimension_2D;
+        } break;
+        
+        case TEXTURE_DIM_3D: {
+            return WGPUTextureDimension_3D;
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_sampler_type(u32 type)
+{
+    switch (type)
+    {
+        case SAMPLER_TYPE_FILTERING: {
+            return WGPUSamplerBindingType_Filtering;
+        } break;
+        
+        case SAMPLER_TYPE_NONFILTERING: {
+            return WGPUSamplerBindingType_NonFiltering;
+        } break;
+        
+        case SAMPLER_TYPE_COMPARISON: {
+            return WGPUSamplerBindingType_Comparison;
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_texture_format(u32 format)
+{
+    switch(format)
+    {
+        case TEXTURE_FORMAT_R8U_NORM: {
+            return WGPUTextureFormat_R8Unorm;
+        } break;
+        
+        case TEXTURE_FORMAT_R8S_NORM: {
+            return WGPUTextureFormat_R8Snorm;
+        } break;
+        
+        case TEXTURE_FORMAT_R8U_INT: {
+            return WGPUTextureFormat_R8Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_R8S_INT: {
+            return WGPUTextureFormat_R8Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_R16U_INT : {
+            return WGPUTextureFormat_R16Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_R16S_INT : {
+            return WGPUTextureFormat_R16Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_R16_FLOAT : {
+            return WGPUTextureFormat_R16Float;
+        } break;
+        
+        case TEXTURE_FORMAT_RG8U_NORM : {
+            return WGPUTextureFormat_RG8Unorm;
+        } break;
+        
+        case TEXTURE_FORMAT_RG8S_NORM : {
+            return WGPUTextureFormat_RG8Snorm;
+        } break;
+        
+        case TEXTURE_FORMAT_RG8U_INT : {
+            return WGPUTextureFormat_RG8Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG8S_INT : {
+            return WGPUTextureFormat_RG8Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_R32U_INT : {
+            return WGPUTextureFormat_R32Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_R32S_INT : {
+            return WGPUTextureFormat_R32Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_R32_FLOAT : {
+            return WGPUTextureFormat_R32Float;
+        } break;
+        
+        case TEXTURE_FORMAT_RG16U_INT : {
+            return WGPUTextureFormat_RG16Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG16S_INT : {
+            return WGPUTextureFormat_RG16Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG16_FLOAT : {
+            return WGPUTextureFormat_RG16Float;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA8U_NORM : {
+            return WGPUTextureFormat_RGBA8Unorm;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA8S_NORM : {
+            return WGPUTextureFormat_RGBA8Snorm;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA8U_INT : {
+            return WGPUTextureFormat_RGBA8Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA8S_INT : {
+            return WGPUTextureFormat_RGBA8Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG32U_INT : {
+            return WGPUTextureFormat_RG32Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG32S_INT : {
+            return WGPUTextureFormat_RG32Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_RG32_FLOAT : {
+            return WGPUTextureFormat_RG32Float;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA16U_INT : {
+            return WGPUTextureFormat_RGBA16Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA16S_INT : {
+            return WGPUTextureFormat_RGBA16Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA16_FLOAT : {
+            return WGPUTextureFormat_RGBA16Float;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA32U_INT : {
+            return WGPUTextureFormat_RGBA32Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA32S_INT : {
+            return WGPUTextureFormat_RGBA32Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_RGBA32_FLOAT : {
+            return WGPUTextureFormat_RGBA32Float;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Texture format.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_texture_access(u32 access)
+{
+    switch(access)
+    {
+        case TEXTURE_ACCESS_WRITEONLY: {
+            return WGPUStorageTextureAccess_WriteOnly;
+        } break;
+        
+        case TEXTURE_ACCESS_READONLY: {
+            return WGPUStorageTextureAccess_ReadOnly;
+        } break;
+        
+        case TEXTURE_ACCESS_READWRITE: {
+            return WGPUStorageTextureAccess_ReadWrite;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid texture access type.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_texture_view_dim(u32 type)
+{
+    switch (type)
+    {
+        case TEXTURE_VIEW_DIM_1D: {
+            return WGPUTextureViewDimension_1D;
+        } break;
+        
+        case TEXTURE_VIEW_DIM_2D: {
+            return WGPUTextureViewDimension_2D;
+        } break;
+        
+        case TEXTURE_VIEW_DIM_2DARRAY: {
+            return WGPUTextureViewDimension_2DArray;
+        } break;
+        
+        case TEXTURE_VIEW_DIM_CUBE: {
+            return WGPUTextureViewDimension_Cube;
+        } break;
+        
+        case TEXTURE_VIEW_DIM_CUBEARRAY: {
+            return WGPUTextureViewDimension_CubeArray;
+        } break;
+        
+        case TEXTURE_VIEW_DIM_3D: {
+            return WGPUTextureViewDimension_3D;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid texture view dimension.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_texture_sample_type(u32 format)
+{
+    switch (format)
+    {
+        case TEXTURE_FORMAT_R8U_NORM :
+        case TEXTURE_FORMAT_R8S_NORM :
+        case TEXTURE_FORMAT_R16_FLOAT :
+        case TEXTURE_FORMAT_RG8U_NORM :
+        case TEXTURE_FORMAT_RG8S_NORM :
+        case TEXTURE_FORMAT_R32_FLOAT :
+        case TEXTURE_FORMAT_RG16_FLOAT :
+        case TEXTURE_FORMAT_RGBA8U_NORM :
+        case TEXTURE_FORMAT_RGBA8S_NORM :
+        case TEXTURE_FORMAT_RG32_FLOAT :
+        case TEXTURE_FORMAT_RGBA16_FLOAT :
+        case TEXTURE_FORMAT_RGBA32_FLOAT : {
+            return WGPUTextureSampleType_Float;
+        } break;
+        
+        case TEXTURE_FORMAT_R8U_INT :
+        case TEXTURE_FORMAT_R16U_INT :
+        case TEXTURE_FORMAT_RG8U_INT :
+        case TEXTURE_FORMAT_R32U_INT :
+        case TEXTURE_FORMAT_RG16U_INT :
+        case TEXTURE_FORMAT_RGBA8U_INT :
+        case TEXTURE_FORMAT_RG32U_INT :
+        case TEXTURE_FORMAT_RGBA16U_INT :
+        case TEXTURE_FORMAT_RGBA32U_INT : {
+            return WGPUTextureSampleType_Uint;
+        } break;
+        
+        case TEXTURE_FORMAT_R8S_INT :
+        case TEXTURE_FORMAT_R16S_INT :
+        case TEXTURE_FORMAT_RG8S_INT :
+        case TEXTURE_FORMAT_R32S_INT :
+        case TEXTURE_FORMAT_RG16S_INT :
+        case TEXTURE_FORMAT_RGBA8S_INT :
+        case TEXTURE_FORMAT_RG32S_INT :
+        case TEXTURE_FORMAT_RGBA16S_INT :
+        case TEXTURE_FORMAT_RGBA32S_INT : {
+            return WGPUTextureSampleType_Sint;
+        } break;
+    }
+    
+    return 0;
 }

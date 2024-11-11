@@ -165,7 +165,8 @@ create_material(renderer_t *rb, v3 ambient, v3 diffuse, v3 specular,
 
 internal u32
 add_compute_pipeline(renderer_t *rb, u32 shader_id,
-                     u32 *bg_ids, u32 bg_count)
+                     u32 *bg_ids, u32 bg_count,
+                     u32 x, u32 y, u32 z)
 {
     u32 id = get_stack_count(rb->compute_pipelines);
     
@@ -174,6 +175,10 @@ add_compute_pipeline(renderer_t *rb, u32 shader_id,
     pipeline->bg_count = bg_count;
     pipeline->bg_layout_ids = (u32 *)malloc(sizeof(*bg_ids)*bg_count);
     memcpy(pipeline->bg_layout_ids, bg_ids, sizeof(*bg_ids)*bg_count);
+    
+    pipeline->workgroup_x = x;
+    pipeline->workgroup_y = y;
+    pipeline->workgroup_z = z;
     
     return id;
 }
@@ -222,7 +227,7 @@ add_render_pipeline(renderer_t *rb, u32 shader_id,
             };
         }
         
-        *bg_layout_id = bg_idx;
+        *bg_layout_id = bg_ids[bg_idx];
     }
     
     return id;
@@ -309,6 +314,27 @@ add_vertex_buffer(renderer_t *rb,
 }
 
 internal u32
+add_texture(renderer_t *rb, void *data, u32 width, u32 height, u32 format, u32 usage)
+{
+    u32 id = get_stack_count(rb->textures);
+    
+    texture_info_t *info = (texture_info_t *)stack_push(&rb->textures);
+    
+    info->data = data;
+    info->dim_type = TEXTURE_DIM_2D;
+    info->mip_level_count = 1;
+    info->sample_count = 1;
+    info->format = format;
+    info->usage = usage;
+    
+    info->size[0] = width;
+    info->size[1] = height;
+    info->size[2] = 1;
+    
+    return id;
+}
+
+internal u32
 add_buffer(renderer_t *rb, u32 usage)
 {
     u32 id = get_stack_count(rb->buffers);
@@ -321,26 +347,29 @@ add_buffer(renderer_t *rb, u32 usage)
     return id;
 }
 
-#define get_bind_layout_for_struct(d, b, v, b_i, b_t) \
-get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), 1, 0, 0)
+#define get_buffer_bind_layout_for_struct(d, b, v, b_i, b_t) \
+get_buffer_bind_layout(d, b, v, b_i, b_t, sizeof(*d), 1, 0, 0)
 
-#define get_bind_layout_for_array(d, c, b, v, b_i, b_t) \
-get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 0, 0)
+#define get_buffer_bind_layout_for_array(d, c, b, v, b_i, b_t) \
+get_buffer_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 0, 0)
 
-#define get_dynamic_bind_layout_for_struct(d, c, b, v, b_i, b_t, i_o) \
-get_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 1, i_o)
+#define get_dynamic_buffer_bind_layout_for_struct(d, c, b, v, b_i, b_t, i_o) \
+get_buffer_bind_layout(d, b, v, b_i, b_t, sizeof(*d), c, 1, i_o)
 
-#define get_dynamic_bind_layout_for_array(d, c, c_d, b, v, b_i, b_t, i_o) \
-get_bind_layout(d, b, v, b_i, b_t, sizeof(*d)*c, c_d, 1, i_o)
+#define get_dynamic_buffer_bind_layout_for_array(d, c, c_d, b, v, b_i, b_t, i_o) \
+get_buffer_bind_layout(d, b, v, b_i, b_t, sizeof(*d)*c, c_d, 1, i_o)
 
 internal bind_layout_t
-get_bind_layout(void *data, u32 binding, u32 visibility, u32 buffer_id, u32 buffer_type,
-                u32 size, u32 count, u32 has_dynamic_offset, u32 id_offset)
+get_buffer_bind_layout(void *data, u32 binding, u32 visibility, u32 buffer_id, u32 buffer_type,
+                       u32 size, u32 count, u32 has_dynamic_offset, u32 id_offset)
 {
-    return (bind_layout_t) {
+    bind_layout_t res = {0};
+    
+    res.type = BINDING_TYPE_BUFFER;
+    res.binding = binding;
+    res.visibility = visibility;
+    res.buffer_layout = (buffer_bind_layout_t) {
         .data = data,
-        .binding = binding,
-        .visibility = visibility,
         .buffer_id = buffer_id,
         .buffer_type = buffer_type,
         .offset = 0,
@@ -349,8 +378,57 @@ get_bind_layout(void *data, u32 binding, u32 visibility, u32 buffer_id, u32 buff
         .has_dynamic_offset = has_dynamic_offset,
         .count = count,
         .stride = 0,
-        .id_offset = id_offset
+        .id_offset = id_offset,
     };
+    
+    return res;
+}
+
+internal bind_layout_t
+get_texture_bind_layout(u32 binding, u32 visibility, u32 texture_id)
+{
+    bind_layout_t res = {0};
+    
+    res.type = BINDING_TYPE_TEXTURE;
+    res.binding = binding;
+    res.visibility = visibility;
+    res.texture_layout = (texture_bind_layout_t) {
+        .id = texture_id,
+    };
+    
+    return res;
+}
+
+internal bind_layout_t
+get_storage_texture_bind_layout(u32 binding, u32 visibility, u32 texture_id, u32 access)
+{
+    bind_layout_t res = {0};
+    
+    res.type = BINDING_TYPE_STORAGE_TEXTURE;
+    res.binding = binding;
+    res.visibility = visibility;
+    res.storage_texture_layout = (storage_texture_bind_layout_t) {
+        .id = texture_id,
+        .access = access,
+    };
+    
+    return res;
+}
+
+internal bind_layout_t
+get_sampler_bind_layout(u32 binding, u32 visibility, u32 sampler_id, u32 type)
+{
+    bind_layout_t res = {0};
+    
+    res.type = BINDING_TYPE_SAMPLER;
+    res.binding = binding;
+    res.visibility = visibility;
+    res.sampler_layout = (sampler_bind_layout_t) {
+        .id = sampler_id,
+        .type = type
+    };
+    
+    return res;
 }
 
 internal u32

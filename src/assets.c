@@ -89,13 +89,13 @@ update_assets(asset_manager_t *am)
 }
 
 internal u32
-add_shader(renderer_t *rb, asset_manager_t *am, char *fn)
+add_shader(renderer_t *rb, asset_manager_t *am, char *fn, u32 type)
 {
     u32 id = get_stack_count(am->entries);
     
     shader_entry_t entry = {0};
     entry.fn = cstr_dup(fn);
-    entry.type = VERTEX_FRAGMENT_SHADER;
+    entry.type = type;
     
     add_asset(am, ASSET_SHADER, &entry);
     
