@@ -487,6 +487,147 @@ get_wgpu_sampler_type(u32 type)
 }
 
 internal u32
+get_texture_format_from_wgpu(u32 format)
+{
+    switch(format)
+    {
+        case WGPUTextureFormat_R8Unorm: {
+            return TEXTURE_FORMAT_R8U_NORM;
+        } break;
+        
+        case WGPUTextureFormat_R8Snorm: {
+            return TEXTURE_FORMAT_R8S_NORM;
+        } break;
+        
+        case WGPUTextureFormat_R8Uint: {
+            return TEXTURE_FORMAT_R8U_INT;
+        } break;
+        
+        case WGPUTextureFormat_R8Sint: {
+            return TEXTURE_FORMAT_R8S_INT;
+        } break;
+        
+        case  WGPUTextureFormat_R16Uint: {
+            return TEXTURE_FORMAT_R16U_INT;
+        } break;
+        
+        case WGPUTextureFormat_R16Sint: {
+            return TEXTURE_FORMAT_R16S_INT;
+        } break;
+        
+        case  WGPUTextureFormat_R16Float: {
+            return TEXTURE_FORMAT_R16_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_RG8Unorm: {
+            return TEXTURE_FORMAT_RG8U_NORM;
+        } break;
+        
+        case WGPUTextureFormat_RG8Snorm: {
+            return TEXTURE_FORMAT_RG8S_NORM;
+        } break;
+        
+        case  WGPUTextureFormat_RG8Uint: {
+            return TEXTURE_FORMAT_RG8U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG8Sint: {
+            return TEXTURE_FORMAT_RG8S_INT;
+        } break;
+        
+        case WGPUTextureFormat_R32Uint: {
+            return TEXTURE_FORMAT_R32U_INT;
+        } break;
+        
+        case WGPUTextureFormat_R32Sint: {
+            return TEXTURE_FORMAT_R32S_INT;
+        } break;
+        
+        case WGPUTextureFormat_R32Float: {
+            return TEXTURE_FORMAT_R32_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_RG16Uint: {
+            return TEXTURE_FORMAT_RG16U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG16Sint: {
+            return TEXTURE_FORMAT_RG16S_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG16Float: {
+            return TEXTURE_FORMAT_RG16_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA8Unorm: {
+            return TEXTURE_FORMAT_RGBA8U_NORM;
+        } break;
+        
+        case WGPUTextureFormat_RGBA8Snorm: {
+            return TEXTURE_FORMAT_RGBA8S_NORM;
+        } break;
+        
+        case WGPUTextureFormat_RGBA8Uint: {
+            return TEXTURE_FORMAT_RGBA8U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA8Sint: {
+            return TEXTURE_FORMAT_RGBA8S_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG32Uint: {
+            return TEXTURE_FORMAT_RG32U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG32Sint: {
+            return TEXTURE_FORMAT_RG32S_INT;
+        } break;
+        
+        case WGPUTextureFormat_RG32Float: {
+            return TEXTURE_FORMAT_RG32_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA16Uint: {
+            return TEXTURE_FORMAT_RGBA16U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA16Sint: {
+            return TEXTURE_FORMAT_RGBA16S_INT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA16Float: {
+            return TEXTURE_FORMAT_RGBA16_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA32Uint: {
+            return TEXTURE_FORMAT_RGBA32U_INT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA32Sint: {
+            return TEXTURE_FORMAT_RGBA32S_INT;
+        } break;
+        
+        case WGPUTextureFormat_RGBA32Float: {
+            return TEXTURE_FORMAT_RGBA32_FLOAT;
+        } break;
+        
+        case WGPUTextureFormat_BGRA8Unorm: {
+            return TEXTURE_FORMAT_BGRA8U_NORM;
+        } break;
+        
+        case WGPUTextureFormat_BGRA8UnormSrgb: {
+            return TEXTURE_FORMAT_BGRA8U_NORM_SRGB;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Texture format.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
 get_wgpu_texture_format(u32 format)
 {
     switch(format)
@@ -611,6 +752,14 @@ get_wgpu_texture_format(u32 format)
             return WGPUTextureFormat_RGBA32Float;
         } break;
         
+        case TEXTURE_FORMAT_BGRA8U_NORM: {
+            return WGPUTextureFormat_BGRA8Unorm;
+        } break;
+        
+        case TEXTURE_FORMAT_BGRA8U_NORM_SRGB: {
+            return WGPUTextureFormat_BGRA8UnormSrgb;
+        } break;
+        
         default: {
             ASSERT_LOG(0, "Invalid Texture format.");
         } break;
@@ -727,4 +876,189 @@ get_wgpu_texture_sample_type(u32 format)
     }
     
     return 0;
+}
+
+internal u32
+get_wgpu_address_mode(u32 mode)
+{
+    switch (mode)
+    {
+        case ADDRESS_MODE_CLAMPTOEDGE: {
+            return WGPUAddressMode_ClampToEdge;
+        } break;
+        
+        case ADDRESS_MODE_REPEAT: {
+            return WGPUAddressMode_Repeat;
+        } break;
+        
+        case ADDRESS_MODE_MIRRORREPEAT: {
+            return WGPUAddressMode_MirrorRepeat;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid sampler address mode.");
+        } break;
+    }
+}
+
+internal u32
+get_wgpu_filter_mode(u32 mode)
+{
+    switch (mode)
+    {
+        case FILTER_NEAREST: {
+            return WGPUFilterMode_Nearest;
+        } break;
+        
+        case FILTER_LINEAR: {
+            return WGPUFilterMode_Linear;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid sampler filter mode.");
+        } break;
+    }
+}
+
+internal u32
+get_wgpu_mipmap_filter_mode(u32 mode)
+{
+    switch (mode)
+    {
+        case MIPMAP_FILTER_NEAREST: {
+            return WGPUMipmapFilterMode_Nearest;
+        } break;
+        
+        case MIPMAP_FILTER_LINEAR: {
+            return WGPUMipmapFilterMode_Linear;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid sampler mipmap filter mode.");
+        } break;
+    }
+}
+
+internal u32
+get_wgpu_blend_factor(u32 factor)
+{
+    switch (factor)
+    {
+        case BLEND_FACTOR_ZERO: {
+            return WGPUBlendFactor_Zero;
+        } break;
+        
+        case BLEND_FACTOR_ONE: {
+            return WGPUBlendFactor_One;
+        } break;
+        
+        case BLEND_FACTOR_SRC: {
+            return WGPUBlendFactor_Src;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC: {
+            return WGPUBlendFactor_OneMinusSrc;
+        } break;
+        
+        case BLEND_FACTOR_SRCALPHA: {
+            return WGPUBlendFactor_SrcAlpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRCALPHA: {
+            return WGPUBlendFactor_OneMinusSrcAlpha;
+        } break;
+        
+        case BLEND_FACTOR_DST: {
+            return WGPUBlendFactor_Dst;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSDST: {
+            return WGPUBlendFactor_OneMinusDst;
+        } break;
+        
+        case BLEND_FACTOR_DSTALPHA: {
+            return WGPUBlendFactor_DstAlpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSDSTALPHA: {
+            return WGPUBlendFactor_OneMinusDstAlpha;
+        } break;
+        
+        case BLEND_FACTOR_SRCALPHASATURATED: {
+            return WGPUBlendFactor_SrcAlphaSaturated;
+        } break;
+        
+        case BLEND_FACTOR_CONSTANT: {
+            return WGPUBlendFactor_Constant;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSCONSTANT: {
+            return WGPUBlendFactor_OneMinusConstant;
+        } break;
+        
+        case BLEND_FACTOR_SRC1: {
+            return WGPUBlendFactor_Src1;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC1: {
+            return WGPUBlendFactor_OneMinusSrc1;
+        } break;
+        
+        case BLEND_FACTOR_SRC1ALPHA: {
+            return WGPUBlendFactor_Src1Alpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC1ALPHA: {
+            return WGPUBlendFactor_OneMinusSrc1Alpha;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Blend Factor.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal u32
+get_wgpu_blend_op(u32 op)
+{
+    switch (op)
+    {
+        case BLEND_OP_ADD: {
+            return WGPUBlendOperation_Add;
+        } break;
+        
+        case BLEND_OP_SUBTRACT: {
+            return WGPUBlendOperation_Subtract;
+        } break;
+        
+        case BLEND_OP_REVERSESUBTRACT: {
+            return WGPUBlendOperation_ReverseSubtract;
+        } break;
+        
+        case BLEND_OP_MIN: {
+            return WGPUBlendOperation_Min;
+        } break;
+        
+        case BLEND_OP_MAX: {
+            return WGPUBlendOperation_Max;
+        } break;
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Blend Operation.");
+        } break;
+    }
+    
+    return 0;
+}
+
+internal WGPUBlendComponent
+get_wgpu_blend_comp(blend_comp_t comp)
+{
+    return (WGPUBlendComponent) {
+        .srcFactor = get_wgpu_blend_factor(comp.src_factor),
+        .dstFactor = get_wgpu_blend_factor(comp.dst_factor),
+        .operation = get_wgpu_blend_op(comp.op),
+    };
 }

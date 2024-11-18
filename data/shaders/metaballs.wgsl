@@ -12,11 +12,19 @@ struct VertexOutput {
 };
 
 @group(0) @binding(0) var distance_field: texture_2d<f32>;
+@group(0) @binding(1) var prev_framebuffer: texture_2d<f32>;
+@group(0) @binding(2) var tex_sampler: sampler;
+
+@group(1) @binding(0) var<uniform> proj: mat4x4f;
+@group(1) @binding(1) var<uniform> view: mat4x4f;
+
+@group(2) @binding(0) var<uniform> model: mat4x4f;
+@group(2) @binding(1) var<uniform> metaball_color: vec3f;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	out.pos = vec4f(in.pos.x, in.pos.y, 0.0, 1.0);
+	out.pos = proj*view*model*vec4f(in.pos, 1.0);
 	out.uv = in.uv;
 	return out;
 }
@@ -24,9 +32,24 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
-	let texel_coords = vec2i(in.uv * vec2f(textureDimensions(distance_field)));
+	let dim = textureDimensions(prev_framebuffer);
+	let fb_uv = in.pos.xy / vec2f(dim.xy);
 
-	let color = textureLoad(distance_field, texel_coords, 0);
+	let color: vec4f = textureSample(distance_field, tex_sampler, in.uv);
+	let prev_color: vec4f = textureSample(prev_framebuffer, tex_sampler, fb_uv);
 
-	return vec4f(color);
+	let dif = prev_color.a - color.a;
+
+	if (dif < 0.1 && dif > -0.1)
+	{
+		return vec4f(metaball_color+prev_color.rgb, saturate(color.a+prev_color.a));
+	} 
+	else if (dif < -0.1)
+	{
+		return vec4f(metaball_color, 2*color.a+prev_color.a);
+	} 
+	else
+	{
+		return vec4f(prev_color.rgb, 2*color.a+prev_color.a);
+	}
 }

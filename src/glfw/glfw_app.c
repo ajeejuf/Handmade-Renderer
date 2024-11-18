@@ -2,7 +2,7 @@
 /*void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
 {
     glViewport(0, 0, width, height);
-}
+}*/
 
 void glfw_key_callback(GLFWwindow *window, int key,
                        int scancode, int action, int mods)
@@ -16,7 +16,7 @@ void glfw_key_callback(GLFWwindow *window, int key,
     else if (action == GLFW_RELEASE)
         input->key_state[key_idx] &= ~INPUT_STATE_DOWN;
     
-}*/
+}
 
 internal void
 init_glfw_app(glfw_app_t *app, 
@@ -53,20 +53,6 @@ init_glfw_app(glfw_app_t *app,
         ASSERT_LOG(app->window, "Error: Failed to create glfw window for %s", name);
     }
     
-    /*// NOTE(ajeej): Initialize GLEW functions
-    {
-        glfwMakeContextCurrent(app->window);
-        glewInit();
-    }*/
-    
-    /*// TODO(ajeej): Move somewhere so doesn't have to be rewritten
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);*/
-    
     // NOTE(ajeej): Init Plat App
     init_plat_app(&app->plat_app, 800, 600, (char *)data_dir);
     
@@ -76,7 +62,7 @@ init_glfw_app(glfw_app_t *app,
         glfwSetWindowUserPointer(app->window, input);
         
         //glfwSetFramebufferSizeCallback(app->window, glfw_framebuffer_size_callback);
-        //glfwSetKeyCallback(app->window, glfw_key_callback);
+        glfwSetKeyCallback(app->window, glfw_key_callback);
     }
 }
 

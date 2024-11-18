@@ -7,22 +7,26 @@ make_color(f32 r, f32 g, f32 b, f32 a)
     };
 }
 
-#define init_camera_default(c, p, sp, sn, as) \
-init_camera(c, p, sp, sn, as, 0.5f, 45.0f, 0.1f, 10000.0f);
+#define init_camera_default(c, p, sp, sn, w, h) \
+init_camera(c, p, sp, sn, w, h, 0.08f, 45.0f, 1.0f, 100.0f);
 
 internal void
 update_camera(camera_t *cam, u32 update_flag)
 {
     if (update_flag & CAMERA_UPDATE_PROJECTION)
     {
-        cam->pers = HMM_Perspective_RH_NO(HMM_ToRad(cam->fov), cam->aspect_ratio,
+        f32 aspect_ratio = cam->width/(f32)cam->height;
+        
+        cam->pers = HMM_Perspective_RH_ZO(HMM_ToRad(cam->fov), aspect_ratio,
                                           cam->n, cam->f);
         
         f32 interp_near = cam->n+(cam->f-cam->n)*cam->orth_interp;
-        f32 h = 2.0f*tan(cam->fov/2.0f) * interp_near;
-        f32 w = h * cam->aspect_ratio;
+        f32 h = 2.0f*HMM_TanF(HMM_ToRad(cam->fov)/2.0f) * interp_near;
+        f32 w = h * aspect_ratio;
         f32 l = -w/2.0f, b = -h/2.0f;
-        cam->orth = HMM_Orthographic_RH_NO(l, -l, b, -b, cam->n, cam->f);
+        cam->orth = HMM_Orthographic_RH_ZO(l, -l, b, -b, cam->n, cam->f);
+        
+        cam->world_to_screen_or = (f32)cam->height/h;
     }
     
     if (update_flag & CAMERA_UPDATE_ORIENTATION)
@@ -42,24 +46,23 @@ update_camera(camera_t *cam, u32 update_flag)
 
 internal void
 init_camera(camera_t *cam, v3 pos, f32 speed, f32 sens,
-            f32 aspect_ratio, f32 orth_interp,
+            u32 width, u32 height, f32 orth_interp,
             f32 fov, f32 near_plane, f32 far_plane)
 {
     cam->pos = pos;
     cam->world_up = HMM_V3(0.0f, 1.0f, 0.0f);
     
-    {
-        quat x = HMM_QFromAxisAngle_RH(HMM_V3(1.0f, 0.0f, 0.0f), HMM_ToRad(0.0f));
-        quat y = HMM_QFromAxisAngle_RH(HMM_V3(0.0f, 1.0f, 0.0f), HMM_ToRad(0.0f));
-        quat z = HMM_QFromAxisAngle_RH(HMM_V3(0.0f, 0.0f, 1.0f), HMM_ToRad(0.0f));
-        cam->rot = HMM_MulQ(z, HMM_MulQ(y, x));
-        
-    }
+    quat x = HMM_QFromAxisAngle_RH(HMM_V3(1.0f, 0.0f, 0.0f), HMM_ToRad(0.0f));
+    quat y = HMM_QFromAxisAngle_RH(HMM_V3(0.0f, 1.0f, 0.0f), HMM_ToRad(0.0f));
+    quat z = HMM_QFromAxisAngle_RH(HMM_V3(0.0f, 0.0f, 1.0f), HMM_ToRad(0.0f));
+    cam->rot = HMM_MulQ(z, HMM_MulQ(y, x));
+    
     cam->speed = speed;
     cam->sens = sens;
     cam->orth_interp = orth_interp;
     cam->fov = fov;
-    cam->aspect_ratio = aspect_ratio;
+    cam->width = width;
+    cam->height = height;
     cam->n = near_plane;
     cam->f = far_plane;
     
@@ -85,11 +88,37 @@ set_camera_pos(camera_t *cam, v3 pos)
     cam->pos = pos;
 }
 
+internal u32
+add_texture(renderer_t *rb, void *data, u32 width, u32 height, u32 format, u32 usage)
+{
+    u32 id = get_stack_count(rb->textures);
+    
+    texture_info_t *info = (texture_info_t *)stack_push(&rb->textures);
+    
+    info->data = data;
+    info->dim_type = TEXTURE_DIM_2D;
+    info->mip_level_count = 1;
+    info->sample_count = 1;
+    info->format = format;
+    info->usage = usage;
+    
+    info->size[0] = width;
+    info->size[1] = height;
+    info->size[2] = 1;
+    
+    return id;
+}
+
 internal void
 init_app_renderer(renderer_t *rb, i32 width, i32 height)
 {
-    init_camera_default(&rb->cam, HMM_V3(0.0f, 0.0f, 3.0f),
-                        0.05f, 0.01f, width/(f32)height);
+    memset(rb, 0, sizeof(*rb));
+    
+    rb->width = width; rb->height = height;
+    
+    u8 *data = (u8 *)malloc(width*height*4);
+    add_texture(rb, data, width, height, TEXTURE_FORMAT_RGBA8U_NORM, TEXTURE_USAGE_RENDER_ATTACHMENT | TEXTURE_USAGE_COPY_DST);
+    add_texture(rb, NULL, 0, 0, 0, 0);
 }
 
 internal u32
@@ -109,8 +138,7 @@ internal void
 push_render_cmd(renderer_t *rb, 
                 u32 mesh_id, u32 mat_id, u32 trans_id)
 {
-    render_cmd_t **cmds = &rb->render_pipelines[rb->cur_pipeline].cmds;
-    render_cmd_t *cmd = stack_push(cmds);
+    render_cmd_t *cmd = stack_push(&rb->render_cmds);
     
     cmd->mesh_id = mesh_id;
     cmd->mat_id = mat_id;
@@ -163,6 +191,22 @@ create_material(renderer_t *rb, v3 ambient, v3 diffuse, v3 specular,
 }
 
 
+internal camera_t *
+add_camera(renderer_t *rb, v3 pos)
+{
+    camera_t cam = {0};
+    
+    init_camera_default(&cam, pos, 0.05f, 0.01f, 
+                        rb->width, rb->height);
+    
+    
+    camera_t *new_cam = (camera_t *)stack_push(&rb->cams);
+    
+    *new_cam = cam;
+    
+    return new_cam;
+}
+
 internal u32
 add_compute_pipeline(renderer_t *rb, u32 shader_id,
                      u32 *bg_ids, u32 bg_count,
@@ -171,6 +215,8 @@ add_compute_pipeline(renderer_t *rb, u32 shader_id,
     u32 id = get_stack_count(rb->compute_pipelines);
     
     compute_pipeline_t *pipeline = stack_push(&rb->compute_pipelines);
+    
+    pipeline->shader_id = shader_id;
     
     pipeline->bg_count = bg_count;
     pipeline->bg_layout_ids = (u32 *)malloc(sizeof(*bg_ids)*bg_count);
@@ -184,7 +230,7 @@ add_compute_pipeline(renderer_t *rb, u32 shader_id,
 }
 
 internal u32
-add_render_pipeline(renderer_t *rb, u32 shader_id,
+add_render_pipeline(renderer_t *rb, u32 shader_id, u32 framebuffer_id, v3 clear, blend_comp_t color, blend_comp_t alpha,
                     u32 *vb_ids, u32 vb_count,
                     u32 *bg_ids, u32 bg_count)
 {
@@ -192,7 +238,10 @@ add_render_pipeline(renderer_t *rb, u32 shader_id,
     
     render_pipeline_t *pipeline = stack_push(&rb->render_pipelines);
     pipeline->shader_id = shader_id;
-    pipeline->cmds = NULL;
+    pipeline->fb_id = framebuffer_id;
+    pipeline->clear = clear;
+    pipeline->color_blend = color;
+    pipeline->alpha_blend = alpha;
     
     pipeline->vb_count = vb_count;
     pipeline->vb_layout_ids = (u32 *)malloc(sizeof(*vb_ids)*vb_count);
@@ -206,7 +255,7 @@ add_render_pipeline(renderer_t *rb, u32 shader_id,
     bind_group_layout_t *layout;
     for (u32 bg_idx = 0; bg_idx < bg_count; bg_idx++)
     {
-        layout = rb->bg_layouts + bg_idx;
+        layout = rb->bg_layouts + bg_ids[bg_idx];
         
         switch (layout->type)
         {
@@ -227,7 +276,7 @@ add_render_pipeline(renderer_t *rb, u32 shader_id,
             };
         }
         
-        *bg_layout_id = bg_ids[bg_idx];
+        *bg_layout_id = bg_idx;
     }
     
     return id;
@@ -314,27 +363,6 @@ add_vertex_buffer(renderer_t *rb,
 }
 
 internal u32
-add_texture(renderer_t *rb, void *data, u32 width, u32 height, u32 format, u32 usage)
-{
-    u32 id = get_stack_count(rb->textures);
-    
-    texture_info_t *info = (texture_info_t *)stack_push(&rb->textures);
-    
-    info->data = data;
-    info->dim_type = TEXTURE_DIM_2D;
-    info->mip_level_count = 1;
-    info->sample_count = 1;
-    info->format = format;
-    info->usage = usage;
-    
-    info->size[0] = width;
-    info->size[1] = height;
-    info->size[2] = 1;
-    
-    return id;
-}
-
-internal u32
 add_buffer(renderer_t *rb, u32 usage)
 {
     u32 id = get_stack_count(rb->buffers);
@@ -343,6 +371,28 @@ add_buffer(renderer_t *rb, u32 usage)
     
     info->size = 0;
     info->usage = usage;
+    
+    return id;
+}
+
+internal u32
+add_sampler(renderer_t *rb, u32 u_mode, u32 v_mode, u32 w_mode,
+            u32 mag_filter, u32 min_filter)
+{
+    u32 id = get_stack_count(rb->samplers);
+    
+    sampler_info_t *info = (sampler_info_t *)stack_push(&rb->samplers);
+    
+    info->am_u = u_mode;
+    info->am_v = v_mode;
+    info->am_w = w_mode;
+    info->mag_filter = mag_filter;
+    info->min_filter = min_filter;
+    info->mipmap_filter = MIPMAP_FILTER_LINEAR;
+    info->lod_min_clamp = 0.0f;
+    info->lod_max_clamp = 1.0f;
+    info->compare = 0;
+    info->max_anisotropy = 1;
     
     return id;
 }
@@ -432,17 +482,37 @@ get_sampler_bind_layout(u32 binding, u32 visibility, u32 sampler_id, u32 type)
 }
 
 internal u32
-add_bind_group(renderer_t *rb, bind_layout_t *binds, u32 count, u32 type)
+add_bind_group(renderer_t *rb, u32 type)
 {
     u32 id = get_stack_count(rb->bg_layouts);
     
     bind_group_layout_t *layout = (bind_group_layout_t *)stack_push(&rb->bg_layouts);
     
-    memcpy(layout->binds, binds, sizeof(*binds)*count);
-    layout->count = count;
+    memset(layout->binds, 0, sizeof(*layout->binds)*ARRAY_COUNT(layout->binds));
+    layout->count = 0;
     layout->type = type;
     
     return id;
+}
+
+internal void
+add_bind_layouts(renderer_t *rb, u32 bg_id, bind_layout_t *binds, u32 count)
+{
+    bind_group_layout_t *layout = rb->bg_layouts + bg_id;
+    
+    ASSERT_LOG(layout->count + count <= ARRAY_COUNT(layout->binds), 
+               "Bind Group %d cannot have more than 16 layouts.", bg_id);
+    
+    memcpy(layout->binds + layout->count, binds, sizeof(*binds)*count);
+    layout->count += count;
+}
+
+internal void
+update_bind_group_layout(renderer_t *rb, u32 bg_id, u32 b_id)
+{
+    bind_update_info_t *info = (bind_update_info_t *)stack_push(&rb->bind_updates);
+    info->bg_id = bg_id;
+    info->b_id = b_id;
 }
 
 internal void
@@ -451,11 +521,61 @@ use_render_pipeline(renderer_t *rb, u32 p_id)
     rb->cur_pipeline = p_id;
 }
 
+#define add_gpu_cmd(r, t, d) \
+_add_gpu_cmd(r, t, d, sizeof(*d))
+
 internal void
-submit_pipeline(renderer_t *rb, u32 type, u32 id)
+_add_gpu_cmd(renderer_t *rb, u32 type, void *data, u32 size)
 {
-    pipeline_submission_t *p_submit = (pipeline_submission_t *)stack_push(&rb->p_submit);
+    gpu_cmd_t *cmd = (gpu_cmd_t *)stack_push(&rb->cmds);
     
-    p_submit->type = type;
-    p_submit->id = id;
+    cmd->type = type;
+    memset(&cmd->data, 0, sizeof(cmd->data));
+    memcpy(&cmd->data, data, size);
+}
+
+internal void
+submit_compute_pipeline(renderer_t *rb, u32 id)
+{
+    compute_pipeline_submit_t submit = {0};
+    submit.id = id;
+    
+    add_gpu_cmd(rb, GPU_CMD_COMPUTE_PIPELINE_SUBMIT, &submit);
+}
+
+internal void
+start_render_pipeline(renderer_t *rb, u32 id)
+{
+    render_pipeline_submit_t submit = {0};
+    submit.id = id;
+    submit.cmd_start = get_stack_count(rb->render_cmds);
+    submit.cmd_count = 0;
+    
+    add_gpu_cmd(rb, GPU_CMD_RENDER_PIPELINE_SUBMIT, &submit);
+}
+
+internal void
+end_render_pipeline(renderer_t *rb)
+{
+    gpu_cmd_t *cmd = get_stack_last(rb->cmds);
+    cmd->data.rp_submit.cmd_count = get_stack_count(rb->render_cmds) - cmd->data.rp_submit.cmd_start;
+}
+
+internal void
+copy_texture(renderer_t *rb, 
+             u32 src, u32 src_offset_x, u32 src_offset_y,
+             u32 dst, u32 dst_offset_x, u32 dst_offset_y,
+             u32 width, u32 height)
+{
+    texture_copy_t tex_copy = {0};
+    tex_copy.src = src;
+    tex_copy.dst = dst;
+    tex_copy.src_offset_x = src_offset_x;
+    tex_copy.src_offset_y = src_offset_y;
+    tex_copy.dst_offset_x = dst_offset_x;
+    tex_copy.dst_offset_y = dst_offset_y;
+    tex_copy.width = width;
+    tex_copy.height = height;
+    
+    add_gpu_cmd(rb, GPU_CMD_TEXTURE_COPY, &tex_copy);
 }

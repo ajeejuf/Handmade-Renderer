@@ -40,27 +40,27 @@ create_quad(renderer_t *rb, v4 color)
 {
     vertex_t *verts = stack_push_array(&rb->verts, 4);
     verts[0] = (vertex_t) {
-        HMM_V3(-0.5f, -0.5f, 0.0f),
+        HMM_V3(-1.0f, -1.0f, 0.0f),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(0.0f, 0.0f),
+        HMM_V2(0.0f, 1.0f),
         color
     };
     verts[1] = (vertex_t) {
-        HMM_V3(0.5f, -0.5f, 0.0f),
-        HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(1.0f, 0.0f),
-        color
-    };
-    verts[2] = (vertex_t) {
-        HMM_V3(0.5f, 0.5f, 0.0f),
+        HMM_V3(1.0f, -1.0f, 0.0f),
         HMM_V3(0.0f, 0.0f, 1.0f),
         HMM_V2(1.0f, 1.0f),
         color
     };
-    verts[3] = (vertex_t) {
-        HMM_V3(-0.5f, 0.5f, 0.0f),
+    verts[2] = (vertex_t) {
+        HMM_V3(1.0f, 1.0f, 0.0f),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(0.0f, 1.0f),
+        HMM_V2(1.0f, 0.0f),
+        color
+    };
+    verts[3] = (vertex_t) {
+        HMM_V3(-1.0f, 1.0f, 0.0f),
+        HMM_V3(0.0f, 0.0f, 1.0f),
+        HMM_V2(0.0f, 0.0f),
         color
     };
     

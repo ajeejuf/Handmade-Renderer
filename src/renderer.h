@@ -47,13 +47,16 @@ typedef struct camera_t {
     v3 front, up, right;
     v3 world_up;
     
+    u32 width, height;
+    
     f32 speed;
     f32 sens;
     f32 orth_interp;
     f32 fov;
-    f32 aspect_ratio;
     f32 n;
     f32 f;
+    
+    f32 world_to_screen_or; 
     
     mat4 pers;
     mat4 orth;
@@ -144,7 +147,9 @@ enum {
     TEXTURE_FORMAT_RGBA16_FLOAT,
     TEXTURE_FORMAT_RGBA32U_INT,
     TEXTURE_FORMAT_RGBA32S_INT,
-    TEXTURE_FORMAT_RGBA32_FLOAT
+    TEXTURE_FORMAT_RGBA32_FLOAT,
+    TEXTURE_FORMAT_BGRA8U_NORM,
+    TEXTURE_FORMAT_BGRA8U_NORM_SRGB
 };
 
 enum {
@@ -182,6 +187,22 @@ enum {
     SAMPLER_TYPE_COMPARISON
 };
 
+enum {
+    ADDRESS_MODE_CLAMPTOEDGE,
+    ADDRESS_MODE_REPEAT,
+    ADDRESS_MODE_MIRRORREPEAT
+};
+
+enum {
+    FILTER_NEAREST,
+    FILTER_LINEAR
+};
+
+enum {
+    MIPMAP_FILTER_NEAREST,
+    MIPMAP_FILTER_LINEAR
+};
+
 typedef struct texture_info_t {
     void *data;
     
@@ -194,6 +215,16 @@ typedef struct texture_info_t {
     u32 format;
     u32 usage;
 } texture_info_t;
+
+typedef struct sampler_info_t {
+    u32 am_u, am_v, am_w;
+    u32 mag_filter, min_filter;
+    u32 mipmap_filter;
+    
+    u32 lod_min_clamp, lod_max_clamp;
+    u32 compare;
+    u32 max_anisotropy;
+} sampler_info_t;
 
 
 enum {
@@ -333,13 +364,56 @@ typedef struct bind_group_layout_t {
     u32 type;
 } bind_group_layout_t;
 
+typedef struct bind_update_info_t {
+    u32 bg_id;
+    u32 b_id;
+} bind_update_info_t;
+
+
 enum {
     PIPELINE_TYPE_RENDER,
     PIPELINE_TYPE_COMPUTE
 };
 
+enum {
+    BLEND_FACTOR_ZERO,
+    BLEND_FACTOR_ONE,
+    BLEND_FACTOR_SRC,
+    BLEND_FACTOR_ONEMINUSSRC,
+    BLEND_FACTOR_SRCALPHA,
+    BLEND_FACTOR_ONEMINUSSRCALPHA,
+    BLEND_FACTOR_DST,
+    BLEND_FACTOR_ONEMINUSDST,
+    BLEND_FACTOR_DSTALPHA,
+    BLEND_FACTOR_ONEMINUSDSTALPHA,
+    BLEND_FACTOR_SRCALPHASATURATED,
+    BLEND_FACTOR_CONSTANT,
+    BLEND_FACTOR_ONEMINUSCONSTANT,
+    BLEND_FACTOR_SRC1,
+    BLEND_FACTOR_ONEMINUSSRC1,
+    BLEND_FACTOR_SRC1ALPHA,
+    BLEND_FACTOR_ONEMINUSSRC1ALPHA,
+};
+
+enum {
+    BLEND_OP_ADD,
+    BLEND_OP_SUBTRACT,
+    BLEND_OP_REVERSESUBTRACT,
+    BLEND_OP_MIN,
+    BLEND_OP_MAX
+};
+
+typedef struct blend_comp_t {
+    u32 src_factor;
+    u32 dst_factor;
+    u32 op;
+} blend_comp_t;
+
 typedef struct render_pipeline_t {
     u32 shader_id;
+    u32 fb_id;
+    v3 clear;
+    blend_comp_t color_blend, alpha_blend;
     
     u32 *vb_layout_ids;
     u32 vb_count;
@@ -350,8 +424,6 @@ typedef struct render_pipeline_t {
     STACK(u32) *bg_const_ids;
     STACK(u32) *bg_frame_ids;
     STACK(u32) *bg_draw_ids;
-    
-    STACK(render_cmd_t) *cmds;
 } render_pipeline_t;
 
 typedef struct compute_pipeline_t {
@@ -365,28 +437,61 @@ typedef struct compute_pipeline_t {
     u32 workgroup_z;
 } compute_pipeline_t;
 
-typedef struct pipeline_submission_t {
-    u32 type;
+typedef struct render_pipeline_submit_t {
     u32 id;
-} pipeline_submission_t;
+    u32 cmd_start;
+    u32 cmd_count;
+} render_pipeline_submit_t;
+
+typedef struct compute_pipeline_submit_t {
+    u32 id;
+} compute_pipeline_submit_t;
+
+typedef struct texture_copy_t {
+    u32 src, dst;
+    u32 src_offset_x, src_offset_y;
+    u32 dst_offset_x, dst_offset_y;
+    u32 width, height;
+} texture_copy_t;
+
+enum {
+    GPU_CMD_RENDER_PIPELINE_SUBMIT,
+    GPU_CMD_COMPUTE_PIPELINE_SUBMIT,
+    GPU_CMD_TEXTURE_COPY
+};
+
+typedef struct gpu_cmd_t {
+    u32 type;
+    
+    union {
+        render_pipeline_submit_t rp_submit;
+        compute_pipeline_submit_t cp_submit;
+        texture_copy_t tex_copy;
+    } data;
+} gpu_cmd_t;
 
 typedef struct renderer_t {
+    
+    i32 width, height;
     
     u32 cur_pipeline;
     
     STACK(render_pipeline_t) *render_pipelines;
     STACK(compute_pipeline_t) *compute_pipelines;
     
+    STACK(sampler_info_t) *samplers;
     STACK(texture_info_t) *textures;
     STACK(buffer_info_t) *buffers;
     STACK(vertex_buffer_layout_t) *vb_layouts;
     STACK(bind_group_layout_t) *bg_layouts;
     
-    STACK(pipeline_submission_t) *p_submit;
+    STACK(gpu_cmd_t *) cmds;
+    STACK(bind_update_info_t) *bind_updates;
     
     STACK(vertex_t) *verts;
     STACK(u32) *indices;
     
+    STACK(render_cmd_t) *render_cmds;
     
     dir_light_t dir_light;
     point_light_t point_lights[POINT_LIGHT_COUNT];
@@ -395,9 +500,7 @@ typedef struct renderer_t {
     STACK(material_t) *mats;
     STACK(mesh_info_t) *meshes;
     
-    STACK(render_cmd_t) *cmds;
-    
-    camera_t cam;
+    STACK(camera_t) *cams;
     
     STACK(mat4) *transforms;
     

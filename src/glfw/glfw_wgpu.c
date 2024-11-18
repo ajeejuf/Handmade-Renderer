@@ -96,6 +96,21 @@ get_next_surface_texture_view(WGPUSurface surface)
     return texture_view;
 }
 
+internal WGPUTextureView
+get_texture_view(WGPUTexture texture, texture_info_t info)
+{
+    WGPUTextureViewDescriptor desc = {0};
+    desc.aspect = WGPUTextureAspect_All;
+    desc.baseArrayLayer = 0;
+    desc.arrayLayerCount = 1;
+    desc.baseMipLevel = 0;
+    desc.mipLevelCount = info.mip_level_count;
+    desc.dimension = get_wgpu_texture_format(info.dim_type);
+    desc.format = get_wgpu_texture_format(info.format);
+    
+    return wgpuTextureCreateView(texture, &desc);
+}
+
 internal void
 init_wgpu(wgpu_renderer_t *wgpu, GLFWwindow *window)
 {
@@ -412,36 +427,16 @@ set_bind_group_entry(renderer_t *rb, wgpu_renderer_t *wgpu,
         
         case BINDING_TYPE_TEXTURE: {
             texture_bind_layout_t t_layout = bind->texture_layout;
-            texture_info_t *info = rb->textures + t_layout.id;
+            texture_info_t info = rb->textures[t_layout.id];
             
-            WGPUTextureViewDescriptor desc = {0};
-            desc.aspect = WGPUTextureAspect_All;
-            desc.baseArrayLayer = 0;
-            desc.arrayLayerCount = 1;
-            desc.baseMipLevel = 0;
-            desc.mipLevelCount = info->mip_level_count;
-            desc.dimension = get_wgpu_texture_view_dim(info->dim_type);
-            desc.format = get_wgpu_texture_format(info->format);
-            
-            WGPUTextureView texture_view = wgpuTextureCreateView(wgpu->textures[t_layout.id], &desc);
-            entry->textureView = texture_view;
+            entry->textureView = get_texture_view(wgpu->textures[t_layout.id], info);
         } break;
         
         case BINDING_TYPE_STORAGE_TEXTURE: {
             storage_texture_bind_layout_t st_layout = bind->storage_texture_layout;
-            texture_info_t *info = rb->textures + st_layout.id;
+            texture_info_t info = rb->textures[st_layout.id];
             
-            WGPUTextureViewDescriptor desc = {0};
-            desc.aspect = WGPUTextureAspect_All;
-            desc.baseArrayLayer = 0;
-            desc.arrayLayerCount = 1;
-            desc.baseMipLevel = 0;
-            desc.mipLevelCount = info->mip_level_count;
-            desc.dimension = get_wgpu_texture_view_dim(info->dim_type);
-            desc.format = get_wgpu_texture_format(info->format);
-            
-            WGPUTextureView texture_view = wgpuTextureCreateView(wgpu->textures[st_layout.id], &desc);
-            entry->textureView = texture_view;
+            entry->textureView = get_texture_view(wgpu->textures[st_layout.id], info);;
         } break;
         
         case BINDING_TYPE_SAMPLER: {
@@ -517,7 +512,8 @@ release_bind_groups(WGPUBindGroup *bind_groups, u32 bg_count)
 }
 
 internal WGPURenderPipeline
-create_render_pipeline(wgpu_renderer_t *wgpu, 
+create_render_pipeline(renderer_t *rb,
+                       wgpu_renderer_t *wgpu, 
                        render_pipeline_t *pipeline, 
                        vertex_buffer_layout_t *vb_layouts, 
                        WGPUBindGroupLayout *bind_group_layouts,
@@ -570,20 +566,12 @@ create_render_pipeline(wgpu_renderer_t *wgpu,
         .constants = NULL,
         .targetCount = 1,
         .targets = &(WGPUColorTargetState) {
-            .format = wgpu->surface_format,
+            .format =  get_wgpu_texture_format(rb->textures[pipeline->fb_id].format),
             .blend = &(WGPUBlendState) {
-                .color = (WGPUBlendComponent) {
-                    .srcFactor = WGPUBlendFactor_SrcAlpha,
-                    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                    .operation = WGPUBlendOperation_Add
-                },
-                .alpha = (WGPUBlendComponent) {
-                    .srcFactor = WGPUBlendFactor_SrcAlpha,
-                    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                    .operation = WGPUBlendOperation_Add
-                }
+                .color = get_wgpu_blend_comp(pipeline->color_blend),
+                .alpha = get_wgpu_blend_comp(pipeline->alpha_blend),
             },
-            .writeMask = WGPUColorWriteMask_All
+            .writeMask = (pipeline->fb_id != 0) ? WGPUColorWriteMask_All : WGPUColorWriteMask_None,
         }
     };
     
@@ -721,6 +709,29 @@ create_texture(wgpu_renderer_t *wgpu, texture_info_t info)
     return wgpuDeviceCreateTexture(wgpu->device, &desc);
 }
 
+internal WGPUSampler
+create_sampler(wgpu_renderer_t *wgpu, sampler_info_t info)
+{
+    WGPUSamplerDescriptor desc = {0};
+    desc.nextInChain = NULL;
+    desc.addressModeU = get_wgpu_address_mode(info.am_u);
+    desc.addressModeV = get_wgpu_address_mode(info.am_v);
+    desc.addressModeW = get_wgpu_address_mode(info.am_w);
+    
+    desc.magFilter = get_wgpu_filter_mode(info.mag_filter);
+    desc.minFilter = get_wgpu_filter_mode(info.min_filter);
+    
+    desc.mipmapFilter = get_wgpu_mipmap_filter_mode(info.mipmap_filter);
+    
+    desc.lodMinClamp = info.lod_min_clamp;
+    desc.lodMaxClamp = info.lod_max_clamp;
+    
+    desc.compare = WGPUCompareFunction_Undefined;
+    desc.maxAnisotropy = info.max_anisotropy;
+    
+    return wgpuDeviceCreateSampler(wgpu->device, &desc);
+}
+
 internal void
 write_to_texture(wgpu_renderer_t *wgpu, WGPUTexture texture, texture_info_t info)
 {
@@ -748,7 +759,10 @@ create_textures(wgpu_renderer_t *wgpu, texture_info_t *info, u32 count)
 {
     WGPUTexture *res = (WGPUTexture *)malloc(sizeof(*res)*count);
     
+    // NOTE(ajeej): the first texture will contains
+    //              surface texture
     for (u32 t_idx = 0; t_idx < count; t_idx++) {
+        if (t_idx == 1) continue;
         res[t_idx] = create_texture(wgpu, info[t_idx]);
         write_to_texture(wgpu, res[t_idx], info[t_idx]);
     }
@@ -756,8 +770,19 @@ create_textures(wgpu_renderer_t *wgpu, texture_info_t *info, u32 count)
     return res;
 }
 
+internal WGPUSampler *
+create_samplers(wgpu_renderer_t *wgpu, sampler_info_t *infos, u32 count)
+{
+    WGPUSampler *res = (WGPUSampler *)malloc(sizeof(*res)*count);
+    
+    for (u32 s_idx = 0; s_idx < count; s_idx++)
+        res[s_idx] = create_sampler(wgpu, infos[s_idx]);
+    
+    return res;
+}
+
 internal void
-init_render_pipelines(wgpu_renderer_t *wgpu, 
+init_render_pipelines(renderer_t *rb, wgpu_renderer_t *wgpu, 
                       render_pipeline_t *pipelines, u32 pipeline_count,
                       vertex_buffer_layout_t *vb_layouts,
                       WGPUBindGroupLayout *bind_group_layouts, u32 bg_count,
@@ -772,7 +797,7 @@ init_render_pipelines(wgpu_renderer_t *wgpu,
     {
         pipeline = pipelines + p_idx;
         
-        wgpu->render_pipelines[p_idx] = create_render_pipeline(wgpu, pipeline, vb_layouts, 
+        wgpu->render_pipelines[p_idx] = create_render_pipeline(rb, wgpu, pipeline, vb_layouts, 
                                                                bind_group_layouts, bg_count,
                                                                modules[pipeline->shader_id]);
     }
@@ -867,27 +892,27 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
 }
 
 internal void
-write_buffer_bind_layout(wgpu_renderer_t *wgpu, buffer_bind_layout_t *binding)
+write_buffer_bind_layout(wgpu_renderer_t *wgpu, buffer_bind_layout_t binding)
 {
-    WGPUBuffer buffer = wgpu->buffers[binding->buffer_id];
+    WGPUBuffer buffer = wgpu->buffers[binding.buffer_id];
     
-    u32 stride = (binding->has_dynamic_offset) ? binding->stride : binding->aligned_size;
-    u8 *data = binding->data;
+    u32 stride = (binding.has_dynamic_offset) ? binding.stride : binding.aligned_size;
+    u8 *data = binding.data;
     
-    if (binding->count == 1 || stride == binding->size)
+    if (binding.count == 1 || stride == binding.size)
     {
-        wgpuQueueWriteBuffer(wgpu->queue, buffer, binding->offset,
-                             data, binding->size*binding->count);
+        wgpuQueueWriteBuffer(wgpu->queue, buffer, binding.offset,
+                             data, binding.size*binding.count);
     }
     else
     {
-        for (u32 i = 0; i < binding->count; i++)
+        for (u32 i = 0; i < binding.count; i++)
         {
             wgpuQueueWriteBuffer(wgpu->queue, buffer,
-                                 binding->offset + stride*i,
-                                 data, binding->size);
+                                 binding.offset + stride*i,
+                                 data, binding.size);
             
-            data += binding->size;
+            data += binding.size;
         }
     }
 }
@@ -908,8 +933,7 @@ write_bind_layout_data(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 
             switch(bind->type)
             {
                 case BINDING_TYPE_BUFFER: {
-                    buffer_bind_layout_t *buffer_bind = &bind->buffer_layout;
-                    write_buffer_bind_layout(wgpu, buffer_bind);
+                    write_buffer_bind_layout(wgpu, bind->buffer_layout);
                 } break;
                 
                 default: {
@@ -920,9 +944,34 @@ write_bind_layout_data(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, u32 
     }
 }
 
+internal void
+update_bind_layout_data(renderer_t *rb, wgpu_renderer_t *wgpu, bind_update_info_t *infos, u32 count)
+{
+    bind_layout_t *bind;
+    bind_update_info_t *info;
+    for (u32 i = 0; i < count; i++)
+    {
+        info = infos + i;
+        
+        bind = rb->bg_layouts[info->bg_id].binds + info->b_id;
+        
+        switch(bind->type)
+        {
+            case BINDING_TYPE_BUFFER: {
+                write_buffer_bind_layout(wgpu, bind->buffer_layout);
+            } break;
+            
+            default: {
+                continue;//ASSERT_LOG(0, "Invalid binding type for writing data");
+            } break;
+        }
+    }
+}
+
 
 internal void
-submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
+submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id,
+                       render_cmd_t *cmds, u32 cmd_count)
 {
     render_pipeline_t *p_info = rb->render_pipelines + p_id;
     
@@ -930,18 +979,40 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
     render_pass_desc.nextInChain = NULL;
     
     WGPURenderPassColorAttachment render_pass_color_attachment = {0};
+    WGPUTextureView target_view;
     
-    render_pass_color_attachment.view = wgpu->target_view;
-    render_pass_color_attachment.resolveTarget = NULL;
-    render_pass_color_attachment.loadOp = WGPULoadOp_Clear;
-    render_pass_color_attachment.storeOp = WGPUStoreOp_Store;
-    render_pass_color_attachment.clearValue = (WGPUColor){ 0.8, 0.4, 0.1 };
-    render_pass_color_attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    
-    render_pass_desc.colorAttachmentCount = 1;
-    render_pass_desc.colorAttachments = &render_pass_color_attachment;
-    render_pass_desc.depthStencilAttachment = NULL;
-    render_pass_desc.timestampWrites = NULL;
+    if (p_info->fb_id != 0)
+    {
+        target_view = get_texture_view(wgpu->textures[p_info->fb_id],
+                                       rb->textures[p_info->fb_id]);
+        render_pass_color_attachment.view = target_view;
+        render_pass_color_attachment.resolveTarget = NULL;
+        render_pass_color_attachment.loadOp = (p_id == 0) ? WGPULoadOp_Load : WGPULoadOp_Clear;
+        render_pass_color_attachment.storeOp = WGPUStoreOp_Store;
+        render_pass_color_attachment.clearValue = (WGPUColor){ p_info->clear.R, p_info->clear.G, p_info->clear.B};
+        render_pass_color_attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        
+        render_pass_desc.colorAttachmentCount = 1;
+        render_pass_desc.colorAttachments = &render_pass_color_attachment;
+        render_pass_desc.depthStencilAttachment = NULL;
+        render_pass_desc.timestampWrites = NULL;
+    }
+    else
+    {
+        target_view = get_texture_view(wgpu->textures[0], rb->textures[0]);
+        
+        render_pass_color_attachment.view = target_view;
+        render_pass_color_attachment.resolveTarget = NULL;
+        render_pass_color_attachment.loadOp = WGPULoadOp_Clear;
+        render_pass_color_attachment.storeOp = WGPUStoreOp_Store;
+        render_pass_color_attachment.clearValue = (WGPUColor){ 0, 0, 0};
+        render_pass_color_attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        
+        render_pass_desc.colorAttachmentCount = 1;
+        render_pass_desc.colorAttachments = &render_pass_color_attachment;
+        render_pass_desc.depthStencilAttachment = NULL;
+        render_pass_desc.timestampWrites = NULL;
+    }
     
     WGPURenderPassEncoder render_pass = wgpuCommandEncoderBeginRenderPass(wgpu->encoder, &render_pass_desc);
     
@@ -968,8 +1039,9 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
     u32 bg_frame_count = get_stack_count(p_info->bg_frame_ids);
     for (u32 bg_idx = 0; bg_idx < bg_frame_count; bg_idx++)
     {
-        u32 idx = p_info->bg_frame_ids[bg_idx];
-        wgpuRenderPassEncoderSetBindGroup(render_pass, bg_idx,
+        u32 group_id  = p_info->bg_frame_ids[bg_idx];
+        u32 idx = p_info->bg_layout_ids[group_id];
+        wgpuRenderPassEncoderSetBindGroup(render_pass, group_id,
                                           wgpu->bind_groups[idx],
                                           0, NULL);
     }
@@ -979,9 +1051,8 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
     u32 stride_count = 0;
     
     render_cmd_t *cmd = NULL;
-    u32 cmd_count = get_stack_count(p_info->cmds);
     for (u32 c_idx = 0; c_idx < cmd_count; c_idx++) {
-        cmd = p_info->cmds + c_idx;
+        cmd = cmds + c_idx;
         
         
         // NOTE(ajeej): Set bind groups that update every draw call
@@ -993,7 +1064,8 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
         buffer_bind_layout_t *buffer_bind;
         for (u32 bg_idx = 0; bg_idx < bg_count; bg_idx++)
         {
-            u32 idx = p_info->bg_draw_ids[bg_idx];
+            u32 group_id  = p_info->bg_draw_ids[bg_idx];
+            u32 idx = p_info->bg_layout_ids[group_id];
             layout = rb->bg_layouts + idx;
             
             for (u32 b_idx = 0; b_idx < layout->count; b_idx++)
@@ -1006,7 +1078,7 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
                 strides[stride_count++] = buffer_bind->stride * id;
             }
             
-            wgpuRenderPassEncoderSetBindGroup(render_pass, idx,
+            wgpuRenderPassEncoderSetBindGroup(render_pass, group_id,
                                               wgpu->bind_groups[idx],
                                               stride_count, strides);
             
@@ -1018,9 +1090,11 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
                                          m_info.indices_idx, 0, 0);
     }
     
-    stack_clear(p_info->cmds);
-    
     wgpuRenderPassEncoderEnd(render_pass);
+    
+    wgpuRenderPassEncoderRelease(render_pass);
+    
+    wgpuTextureViewRelease(target_view);
 }
 
 internal void
@@ -1049,6 +1123,35 @@ submit_compute_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id)
                                              p_info->workgroup_z);
     
     wgpuComputePassEncoderEnd(compute_pass);
+    wgpuComputePassEncoderRelease(compute_pass);
+}
+
+internal void
+submit_texture_copy(wgpu_renderer_t *wgpu, 
+                    u32 src, u32 src_offset_x, u32 src_offset_y,
+                    u32 dst, u32 dst_offset_x, u32 dst_offset_y,
+                    u32 width, u32 height)
+{
+    WGPUImageCopyTexture src_tex = {0};
+    WGPUImageCopyTexture dst_tex = {0};
+    WGPUExtent3D copy_size = {0};
+    
+    src_tex.texture = wgpu->textures[src];
+    src_tex.mipLevel = 0;
+    src_tex.origin = (WGPUOrigin3D){ src_offset_x, src_offset_y, 0 };
+    src_tex.aspect = WGPUTextureAspect_All;
+    
+    dst_tex.texture = wgpu->textures[dst];
+    dst_tex.mipLevel = 0;
+    dst_tex.origin = (WGPUOrigin3D){ dst_offset_x, dst_offset_y, 0 };
+    dst_tex.aspect = WGPUTextureAspect_All;
+    
+    copy_size.width = width;
+    copy_size.height = height;
+    copy_size.depthOrArrayLayers = 1;
+    
+    wgpuCommandEncoderCopyTextureToTexture(wgpu->encoder,
+                                           &src_tex, &dst_tex, &copy_size);
 }
 
 INIT_RENDERER(init_renderer)
@@ -1057,6 +1160,8 @@ INIT_RENDERER(init_renderer)
     
     // NOTE(ajeej): Initialize WGPU
     init_wgpu(wgpu, window);
+    
+    rb->textures[1].format = get_texture_format_from_wgpu(wgpu->surface_format);
     
     // NOTE(ajeej): Compile shaders
     u32 module_count = get_stack_count(am->shader_assets);
@@ -1076,7 +1181,7 @@ INIT_RENDERER(init_renderer)
     
     // NOTE(ajeej): Create render pipelines
     u32 render_pipeline_count = get_stack_count(rb->render_pipelines);
-    init_render_pipelines(wgpu, rb->render_pipelines, render_pipeline_count,
+    init_render_pipelines(rb, wgpu, rb->render_pipelines, render_pipeline_count,
                           rb->vb_layouts,
                           bind_group_layouts, wgpu->bg_count,
                           shader_modules, module_count);
@@ -1101,7 +1206,16 @@ INIT_RENDERER(init_renderer)
     wgpu->t_count = get_stack_count(rb->textures);
     wgpu->textures = create_textures(wgpu, rb->textures, wgpu->t_count);
     
+    wgpu->s_count = get_stack_count(rb->samplers);
+    wgpu->samplers = create_samplers(wgpu, rb->samplers, wgpu->s_count);
+    
     // NOTE(ajeej): Create bind groups
+    
+    // TODO(ajeej): temp solution
+    WGPUSurfaceTexture surface_texture;
+    wgpuSurfaceGetCurrentTexture(wgpu->surface, &surface_texture);
+    wgpu->textures[1] = surface_texture.texture;
+    
     wgpu->bind_groups = get_bind_groups(rb, wgpu, rb->bg_layouts, bind_group_layouts, wgpu->bg_count);
     
     write_bind_layout_data(wgpu, rb->bg_layouts, wgpu->bg_count);
@@ -1117,8 +1231,12 @@ START_FRAME(start_frame)
     encoder_desc.nextInChain = NULL;
     encoder_desc.label = make_wgpu_str("Command Encoder");
     
-    wgpu->target_view = get_next_surface_texture_view(wgpu->surface);
-    ASSERT_LOG(wgpu->target_view, "Failed to get target view!");
+    /*wgpu->target_view = get_next_surface_texture_view(wgpu->surface);
+    ASSERT_LOG(wgpu->target_view, "Failed to get target view!");*/
+    
+    WGPUSurfaceTexture surface_texture;
+    wgpuSurfaceGetCurrentTexture(wgpu->surface, &surface_texture);
+    wgpu->textures[1] = surface_texture.texture;
     
     wgpu->encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, &encoder_desc);
 }
@@ -1127,26 +1245,53 @@ END_FRAME(end_frame)
 {
     wgpu_renderer_t *wgpu = (wgpu_renderer_t *)rb->api;
     
-    u32 p_submit_count = get_stack_count(rb->p_submit);
-    pipeline_submission_t *p_submit;
     
-    for (u32 s_idx = 0; s_idx < p_submit_count; s_idx++)
+    u32 update_count = get_stack_count(rb->bind_updates);
+    update_bind_layout_data(rb, wgpu, rb->bind_updates, update_count);
+    stack_clear(rb->bind_updates);
+    
+    
+    u32 cmd_count = get_stack_count(rb->cmds);
+    gpu_cmd_t *gpu_cmd;
+    for (u32 c_idx = 0; c_idx < cmd_count; c_idx++)
     {
-        p_submit = rb->p_submit + s_idx;
+        gpu_cmd = rb->cmds + c_idx;
         
-        switch (p_submit->type)
+        switch(gpu_cmd->type)
         {
-            case PIPELINE_TYPE_RENDER: {
-                submit_render_pipeline(rb, wgpu, p_submit->id);
+            case GPU_CMD_RENDER_PIPELINE_SUBMIT: {
+                render_pipeline_submit_t submit = gpu_cmd->data.rp_submit;
+                
+                submit_render_pipeline(rb, wgpu, submit.id,
+                                       rb->render_cmds + submit.cmd_start,
+                                       submit.cmd_count);
             } break;
             
-            case PIPELINE_TYPE_COMPUTE: {
-                submit_compute_pipeline(rb, wgpu, p_submit->id);
+            case GPU_CMD_COMPUTE_PIPELINE_SUBMIT: {
+                compute_pipeline_submit_t submit = gpu_cmd->data.cp_submit;
+                
+                submit_compute_pipeline(rb, wgpu, submit.id);
+            } break;
+            
+            case GPU_CMD_TEXTURE_COPY: {
+                texture_copy_t tex_copy = gpu_cmd->data.tex_copy;
+                
+                submit_texture_copy(wgpu, 
+                                    tex_copy.src,
+                                    tex_copy.src_offset_x, tex_copy.src_offset_y,
+                                    tex_copy.dst,
+                                    tex_copy.dst_offset_x, tex_copy.dst_offset_y,
+                                    tex_copy.width, tex_copy.height);
+            } break;
+            
+            default: {
+                ASSERT_LOG(0, "Invalid GPU command type.");
             } break;
         }
     }
     
-    stack_clear(rb->p_submit);
+    stack_clear(rb->cmds);
+    stack_clear(rb->render_cmds);
     
     WGPUCommandBufferDescriptor cmd_buffer_desc = {0};
     cmd_buffer_desc.nextInChain = NULL;
@@ -1160,7 +1305,6 @@ END_FRAME(end_frame)
     wgpuCommandBufferRelease(cmd);
     LOG("Command submitted.");
     
-    wgpuTextureViewRelease(wgpu->target_view);
     wgpuSurfacePresent(wgpu->surface);
     
     wgpuDeviceTick(wgpu->device);
