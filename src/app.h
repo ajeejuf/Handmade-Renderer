@@ -43,6 +43,9 @@ typedef struct app_t {
     renderer_t rb;
     asset_manager_t am;
     STACK(entity_t) *entities;
+    STACK(physic_comp_t) *physics;
+    
+    STACK(text_t) *texts;
     
     input_t input;
 } app_t;

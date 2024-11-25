@@ -6,6 +6,9 @@ typedef struct glfw_app_t {
     loaded_code_t code;
     app_func_table_t funcs;
     
+    loaded_code_t render_code;
+    render_function_table_t render_funcs;
+    
     GLFWwindow *window;
     
     app_t plat_app;

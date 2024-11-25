@@ -1,0 +1,15 @@
+[submodule "lib/emsdk"]
+	path = lib/emsdk
+	url = https://github.com/emscripten-core/emsdk.git
+[submodule "lib/depot_tools"]
+	path = lib/depot_tools
+	url = https://chromium.googlesource.com/chromium/tools/depot_tools.git
+[submodule "lib/glfw"]
+	path = lib/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "lib/glfw3webgpu"]
+	path = lib/glfw3webgpu
+	url = https://github.com/eliemichel/glfw3webgpu.git
+[submodule "lib/dawn"]
+	path = lib/dawn
+	url = https://dawn.googlesource.com/dawn
