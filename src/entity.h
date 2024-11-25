@@ -20,4 +20,15 @@ typedef struct entity_t {
     u32 physic_id;
 } entity_t;
 
+typedef struct text_t {
+    u32 font_id;
+    u32 ch_count;
+    u32 trans_id;
+    
+    u32 update;
+    
+    f32 size;
+    v3 pos;
+} text_t;
+
 #endif //ENTITY_H

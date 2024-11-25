@@ -1,8 +1,23 @@
 
+internal u32
+push_mesh_info(renderer_t *rb, u32 idx_count, u32 vert_base, u32 prim_type)
+{
+    u32 id = get_stack_count(rb->meshes);
+    
+    mesh_info_t *info = stack_push(&rb->meshes);
+    info->indices_idx = get_stack_count(rb->indices);
+    info->indices_count = idx_count;
+    info->vert_base = vert_base;
+    info->prim_type = prim_type;
+    
+    return id;
+}
 
 internal u32
 create_triangle(renderer_t *rb, v4 color)
 {
+    u32 vert_base = get_stack_count(rb->verts);
+    
     vertex_t *verts = stack_push_array(&rb->verts, 3);
     verts[0] = (vertex_t) {
         HMM_V3(-0.5f, -0.5f, 0.0f),
@@ -25,7 +40,7 @@ create_triangle(renderer_t *rb, v4 color)
         color,
     };
     
-    u32 id = push_mesh_info(rb, 3, PRIMITIVE_TRIANGLES);
+    u32 id = push_mesh_info(rb, 3, vert_base, PRIMITIVE_TRIANGLES);
     
     u32 *indices = stack_push_array(&rb->indices, 3);
     indices[0] = 0;
@@ -36,35 +51,37 @@ create_triangle(renderer_t *rb, v4 color)
 }
 
 internal u32
-create_quad(renderer_t *rb, v4 color)
+create_textured_quad(renderer_t *rb, v3 center, v2 dim, v2 uv[4], v4 color) 
 {
+    u32 vert_base = get_stack_count(rb->verts);
+    
     vertex_t *verts = stack_push_array(&rb->verts, 4);
     verts[0] = (vertex_t) {
-        HMM_V3(-1.0f, -1.0f, 0.0f),
+        HMM_V3(center.X - dim.X/2.0f, center.Y - dim.Y/2.0f, center.Z),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(0.0f, 1.0f),
+        uv[0],
         color
     };
     verts[1] = (vertex_t) {
-        HMM_V3(1.0f, -1.0f, 0.0f),
+        HMM_V3(center.X + dim.X/2.0f, center.Y - dim.Y/2.0f, center.Z),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(1.0f, 1.0f),
+        uv[1],
         color
     };
     verts[2] = (vertex_t) {
-        HMM_V3(1.0f, 1.0f, 0.0f),
+        HMM_V3(center.X + dim.X/2.0f, center.Y + dim.Y/2.0f, center.Z),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(1.0f, 0.0f),
+        uv[2],
         color
     };
     verts[3] = (vertex_t) {
-        HMM_V3(-1.0f, 1.0f, 0.0f),
+        HMM_V3(center.X - dim.X/2.0f, center.Y + dim.Y/2.0f, center.Z),
         HMM_V3(0.0f, 0.0f, 1.0f),
-        HMM_V2(0.0f, 0.0f),
+        uv[3],
         color
     };
     
-    u32 id = push_mesh_info(rb, 6, PRIMITIVE_TRIANGLES);
+    u32 id = push_mesh_info(rb, 6, vert_base, PRIMITIVE_TRIANGLES);
     
     u32 *indices = stack_push_array(&rb->indices, 6);
     indices[0] = 0;
@@ -76,6 +93,19 @@ create_quad(renderer_t *rb, v4 color)
     indices[5] = 3;
     
     return id;
+}
+
+internal u32
+create_quad(renderer_t *rb, v3 center, v2 dim, v4 color)
+{
+    v2 uv[4] = {
+        HMM_V2(0.0f, 1.0f),
+        HMM_V2(1.0f, 1.0f),
+        HMM_V2(1.0f, 0.0f),
+        HMM_V2(0.0f, 0.0f)
+    };
+    
+    return create_textured_quad(rb, center, dim, uv, color);
 }
 
 internal u32
@@ -194,14 +224,11 @@ create_cube(renderer_t *rb, v4 color)
         20, 21, 22, 20, 22, 23
     };
     
-    u32 offset = get_stack_count(rb->verts);
+    u32 vert_base = get_stack_count(rb->verts);
     vertex_t *verts = stack_push_array(&rb->verts, 24);
     memcpy(verts, nv, sizeof(nv));
     
-    u32 id = push_mesh_info(rb, 36, PRIMITIVE_TRIANGLES);
-    
-    for (u32 i = 0; i < ARRAY_COUNT(ni); i++)
-        ni[i] += offset;
+    u32 id = push_mesh_info(rb, 36, vert_base, PRIMITIVE_TRIANGLES);
     
     u32 *indices = stack_push_array(&rb->indices, 36);
     memcpy(indices, ni, sizeof(ni));
@@ -218,10 +245,10 @@ create_sphere(renderer_t *rb, u32 stacks, u32 slices, v4 color)
     u32 v_count = (stacks+1)*(slices+1);
     u32 i_count = stacks*slices*6;
     
-    u32 offset = get_stack_count(rb->verts);
+    u32 vert_base  = get_stack_count(rb->verts);
     vertex_t *verts = stack_push_array(&rb->verts, v_count);
     
-    u32 id = push_mesh_info(rb, i_count, PRIMITIVE_TRIANGLES);
+    u32 id = push_mesh_info(rb, i_count, vert_base, PRIMITIVE_TRIANGLES);
     
     u32 *indices = stack_push_array(&rb->indices, i_count);
     
@@ -260,16 +287,16 @@ create_sphere(renderer_t *rb, u32 stacks, u32 slices, v4 color)
         {
             if (i != 0)
             {
-                *(indices++) = k1 + offset;
-                *(indices++) = k2 + offset;
-                *(indices++) = k1+1 + offset;
+                *(indices++) = k1;
+                *(indices++) = k2;
+                *(indices++) = k1+1;
             }
             
             if (i != (stacks-1))
             {
-                *(indices++) = k1+1 + offset;
-                *(indices++) = k2 + offset;
-                *(indices++) = k2+1 + offset;
+                *(indices++) = k1+1;
+                *(indices++) = k2;
+                *(indices++) = k2+1;
             }
         }
     }
@@ -455,16 +482,13 @@ create_icosahedron(renderer_t *rb, v4 color)
     u32 v_count, i_count;
     build_icosahedron(temp_v, color, &v, &v_count, &i, &i_count);
     
-    u32 offset = get_stack_count(rb->verts);
+    u32 vert_base = get_stack_count(rb->verts);
     vertex_t *verts = stack_push_array(&rb->verts, v_count);
     memcpy(verts, v, v_count*sizeof(*verts));
     
-    u32 id = push_mesh_info(rb, i_count, PRIMITIVE_TRIANGLES);
+    u32 id = push_mesh_info(rb, i_count, vert_base, PRIMITIVE_TRIANGLES);
     
     u32 *indices = stack_push_array(&rb->indices, i_count);
-    
-    for (u32 j = 0; j < i_count; j++)
-        indices[j] = i[j] + offset;
     
     free(i); free(v);
     free(temp_v);

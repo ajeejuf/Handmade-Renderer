@@ -8,7 +8,7 @@ make_color(f32 r, f32 g, f32 b, f32 a)
 }
 
 #define init_camera_default(c, p, sp, sn, w, h) \
-init_camera(c, p, sp, sn, w, h, 0.08f, 45.0f, 1.0f, 100.0f);
+init_camera(c, p, sp, sn, w, h, 1.0f, 45.0f, 1.0f, 100.0f);
 
 internal void
 update_camera(camera_t *cam, u32 update_flag)
@@ -20,8 +20,7 @@ update_camera(camera_t *cam, u32 update_flag)
         cam->pers = HMM_Perspective_RH_ZO(HMM_ToRad(cam->fov), aspect_ratio,
                                           cam->n, cam->f);
         
-        f32 interp_near = cam->n+(cam->f-cam->n)*cam->orth_interp;
-        f32 h = 2.0f*HMM_TanF(HMM_ToRad(cam->fov)/2.0f) * interp_near;
+        f32 h = cam->orth_h;
         f32 w = h * aspect_ratio;
         f32 l = -w/2.0f, b = -h/2.0f;
         cam->orth = HMM_Orthographic_RH_ZO(l, -l, b, -b, cam->n, cam->f);
@@ -46,7 +45,7 @@ update_camera(camera_t *cam, u32 update_flag)
 
 internal void
 init_camera(camera_t *cam, v3 pos, f32 speed, f32 sens,
-            u32 width, u32 height, f32 orth_interp,
+            u32 width, u32 height, f32 orth_h,
             f32 fov, f32 near_plane, f32 far_plane)
 {
     cam->pos = pos;
@@ -59,7 +58,7 @@ init_camera(camera_t *cam, v3 pos, f32 speed, f32 sens,
     
     cam->speed = speed;
     cam->sens = sens;
-    cam->orth_interp = orth_interp;
+    cam->orth_h = orth_h;
     cam->fov = fov;
     cam->width = width;
     cam->height = height;
@@ -122,27 +121,70 @@ init_app_renderer(renderer_t *rb, i32 width, i32 height)
 }
 
 internal u32
-push_mesh_info(renderer_t *rb, u32 idx_count, u32 prim_type)
+process_font_asset(renderer_t *rb, asset_manager_t *am, u32 asset_id)
 {
-    u32 id = get_stack_count(rb->meshes);
+    font_asset_t asset = am->font_assets[asset_id];
     
-    mesh_info_t *info = stack_push(&rb->meshes);
-    info->indices_idx = get_stack_count(rb->indices);
-    info->indices_count = idx_count;
-    info->prim_type = prim_type;
+    u32 id = get_stack_count(rb->fonts);
+    font_info_t *info = stack_push(&rb->fonts);
+    
+    info->tex_id = add_texture(rb, asset.atlas_bitmap, 
+                               asset.atlas_w, asset.atlas_h,
+                               TEXTURE_FORMAT_R8U_NORM,
+                               TEXTURE_USAGE_COPY_DST | 
+                               TEXTURE_USAGE_TEXTURE_BINDING);
+    
+    info->mesh_start_id = get_stack_count(rb->meshes);
+    
+    info->start = asset.ch_start;
+    info->count = asset.ch_count;
+    
+    info->xoff = (f32 *)malloc(sizeof(f32)*asset.ch_count);
+    info->yoff = (f32 *)malloc(sizeof(f32)*asset.ch_count);
+    info->xadvance = (f32 *)malloc(sizeof(f32)*asset.ch_count);
+    
+    stbtt_packedchar *packed_chs = asset.packed_chs;
+    stbtt_aligned_quad *aligned_quads = asset.aligned_quads;
+    
+    v2 glyph_size, center, uvs[4];
+    stbtt_packedchar packed_ch;
+    stbtt_aligned_quad aligned_quad;
+    for (u32 i = 0; i < asset.ch_count; i++)
+    {
+        packed_ch = packed_chs[i];
+        aligned_quad = aligned_quads[i];
+        
+        glyph_size = HMM_V2(packed_ch.x1 - packed_ch.x0,
+                            packed_ch.y1 - packed_ch.y0);
+        
+        uvs[0] = HMM_V2(aligned_quad.s0, aligned_quad.t1);
+        uvs[1] = HMM_V2(aligned_quad.s1, aligned_quad.t1);
+        uvs[2] = HMM_V2(aligned_quad.s1, aligned_quad.t0);
+        uvs[3] = HMM_V2(aligned_quad.s0, aligned_quad.t0);
+        
+        center = HMM_DivV2F(glyph_size, 2.0f);
+        create_textured_quad(rb, HMM_V3(center.X, -center.Y, 0.0f), glyph_size, uvs, 
+                             HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
+        
+        info->xoff[i] = packed_ch.xoff;
+        info->yoff[i] = packed_ch.yoff + glyph_size.Y;
+        info->xadvance[i] = packed_ch.xadvance;
+    }
     
     return id;
 }
 
 internal void
 push_render_cmd(renderer_t *rb, 
-                u32 mesh_id, u32 mat_id, u32 trans_id)
+                u32 mesh_id, u32 mat_id, u32 trans_id,
+                u32 inst_count)
 {
     render_cmd_t *cmd = stack_push(&rb->render_cmds);
     
     cmd->mesh_id = mesh_id;
     cmd->mat_id = mat_id;
     cmd->trans_id = trans_id;
+    cmd->inst_count = inst_count;
 }
 
 internal void
@@ -192,13 +234,11 @@ create_material(renderer_t *rb, v3 ambient, v3 diffuse, v3 specular,
 
 
 internal camera_t *
-add_camera(renderer_t *rb, v3 pos)
+add_camera(renderer_t *rb, v3 pos, f32 orth_h, f32 fov, f32 n, f32 f)
 {
     camera_t cam = {0};
     
-    init_camera_default(&cam, pos, 0.05f, 0.01f, 
-                        rb->width, rb->height);
-    
+    init_camera(&cam, pos, 0.05f, 0.01f, rb->width, rb->height, orth_h, fov, n, f);
     
     camera_t *new_cam = (camera_t *)stack_push(&rb->cams);
     
@@ -550,8 +590,19 @@ start_render_pipeline(renderer_t *rb, u32 id)
     submit.id = id;
     submit.cmd_start = get_stack_count(rb->render_cmds);
     submit.cmd_count = 0;
+    submit.color = HMM_V3(0.0f, 0.0f, 0.0f);
+    submit.clear = 0;
     
     add_gpu_cmd(rb, GPU_CMD_RENDER_PIPELINE_SUBMIT, &submit);
+}
+
+internal void
+clear_color(renderer_t *rb, v3 color)
+{
+    render_pipeline_submit_t *submit = &get_stack_last(rb->cmds)->data.rp_submit;
+    
+    submit->color = color;
+    submit->clear = 1;
 }
 
 internal void

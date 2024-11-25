@@ -16,6 +16,11 @@
 #define HANDMADE_MATH_USE_DEGREES
 #include <HandmadeMath.h>
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_truetype.h>
+#include <stb_image_write.h>
+
 #define internal static
 #define global static
 #define local static

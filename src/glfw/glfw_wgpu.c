@@ -971,7 +971,8 @@ update_bind_layout_data(renderer_t *rb, wgpu_renderer_t *wgpu, bind_update_info_
 
 internal void
 submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id,
-                       render_cmd_t *cmds, u32 cmd_count)
+                       render_cmd_t *cmds, u32 cmd_count,
+                       v3 clear_color, u32 clear)
 {
     render_pipeline_t *p_info = rb->render_pipelines + p_id;
     
@@ -987,9 +988,9 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id,
                                        rb->textures[p_info->fb_id]);
         render_pass_color_attachment.view = target_view;
         render_pass_color_attachment.resolveTarget = NULL;
-        render_pass_color_attachment.loadOp = (p_id == 0) ? WGPULoadOp_Load : WGPULoadOp_Clear;
+        render_pass_color_attachment.loadOp = (clear) ? WGPULoadOp_Clear : WGPULoadOp_Load;
         render_pass_color_attachment.storeOp = WGPUStoreOp_Store;
-        render_pass_color_attachment.clearValue = (WGPUColor){ p_info->clear.R, p_info->clear.G, p_info->clear.B};
+        render_pass_color_attachment.clearValue = (WGPUColor){ clear_color.R, clear_color.G, clear_color.B };
         render_pass_color_attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
         
         render_pass_desc.colorAttachmentCount = 1;
@@ -1005,7 +1006,7 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id,
         render_pass_color_attachment.resolveTarget = NULL;
         render_pass_color_attachment.loadOp = WGPULoadOp_Clear;
         render_pass_color_attachment.storeOp = WGPUStoreOp_Store;
-        render_pass_color_attachment.clearValue = (WGPUColor){ 0, 0, 0};
+        render_pass_color_attachment.clearValue = (WGPUColor){ 0, 0, 0 };
         render_pass_color_attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
         
         render_pass_desc.colorAttachmentCount = 1;
@@ -1086,8 +1087,8 @@ submit_render_pipeline(renderer_t *rb, wgpu_renderer_t *wgpu, u32 p_id,
         }
         
         mesh_info_t m_info = rb->meshes[cmd->mesh_id];
-        wgpuRenderPassEncoderDrawIndexed(render_pass, m_info.indices_count, 1,
-                                         m_info.indices_idx, 0, 0);
+        wgpuRenderPassEncoderDrawIndexed(render_pass, m_info.indices_count, cmd->inst_count,
+                                         m_info.indices_idx, m_info.vert_base, 0);
     }
     
     wgpuRenderPassEncoderEnd(render_pass);
@@ -1264,7 +1265,8 @@ END_FRAME(end_frame)
                 
                 submit_render_pipeline(rb, wgpu, submit.id,
                                        rb->render_cmds + submit.cmd_start,
-                                       submit.cmd_count);
+                                       submit.cmd_count,
+                                       submit.color, submit.clear);
             } break;
             
             case GPU_CMD_COMPUTE_PIPELINE_SUBMIT: {

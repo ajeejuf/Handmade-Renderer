@@ -38,18 +38,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	let color: vec4f = textureSample(distance_field, tex_sampler, in.uv);
 	let prev_color: vec4f = textureSample(prev_framebuffer, tex_sampler, fb_uv);
 
-	let dif = prev_color.a - color.a;
-
-	if (dif < 0.1 && dif > -0.1)
-	{
-		return vec4f(metaball_color+prev_color.rgb, saturate(color.a+prev_color.a));
-	} 
-	else if (dif < -0.1)
-	{
-		return vec4f(metaball_color, 2*color.a+prev_color.a);
-	} 
-	else
-	{
-		return vec4f(prev_color.rgb, 2*color.a+prev_color.a);
-	}
+	return vec4f(metaball_color, color.a);
 }

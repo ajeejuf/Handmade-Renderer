@@ -18,8 +18,6 @@ typedef struct vertex_t {
 #define color_to_v3(r, g, b) HMM_V3(r/255.0f, g/255.0f, b/255.0f);
 
 
-// NOTE(ajeej): Shader
-
 enum {
     PRIMITIVE_POINTS = 0,
     PRIMITIVE_LINES,
@@ -31,7 +29,6 @@ enum {
     PRIMITIVE_QUADS,
 };
 
-// TODO(ajeej): change create_*_instance to take these inputs
 enum {
     SHAPE_TRIANGLE = 0,
     SHAPE_SQUARE,
@@ -51,7 +48,7 @@ typedef struct camera_t {
     
     f32 speed;
     f32 sens;
-    f32 orth_interp;
+    f32 orth_h;
     f32 fov;
     f32 n;
     f32 f;
@@ -107,6 +104,7 @@ typedef struct material_t {
 typedef struct mesh_info_t {
     u32 indices_idx;
     u32 indices_count;
+    u32 vert_base;
     u32 prim_type;
 } mesh_info_t;
 
@@ -114,8 +112,16 @@ typedef struct render_cmd_t {
     u32 mesh_id;
     u32 mat_id;
     u32 trans_id;
+    u32 inst_count;
 } render_cmd_t;
 
+typedef struct font_info_t {
+    u32 tex_id;
+    u32 mesh_start_id;
+    u32 start, count;
+    
+    f32 *xoff, *yoff, *xadvance;
+} font_info_t;
 
 enum {
     TEXTURE_FORMAT_R8U_NORM,
@@ -441,6 +447,8 @@ typedef struct render_pipeline_submit_t {
     u32 id;
     u32 cmd_start;
     u32 cmd_count;
+    v3 color;
+    u32 clear;
 } render_pipeline_submit_t;
 
 typedef struct compute_pipeline_submit_t {
@@ -499,6 +507,7 @@ typedef struct renderer_t {
     
     STACK(material_t) *mats;
     STACK(mesh_info_t) *meshes;
+    STACK(font_info_t) *fonts;
     
     STACK(camera_t) *cams;
     

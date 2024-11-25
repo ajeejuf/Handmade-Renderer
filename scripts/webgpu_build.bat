@@ -18,7 +18,7 @@ pushd ..\build
 copy %lib_dir%\glfw\install\bin\glfw3.dll .\
 copy %lib_dir%\dawn\install\Release\bin\webgpu_dawn.dll .\
 
-cl %compiler_flags% %includes% ..\apps\metaballs.c -LD -MT -D_URSDLL /link %linker_flags% -EXPORT:init_app -EXPORT:update_and_render /out:metaballs.dll
+cl %compiler_flags% %includes% ..\apps\metaballs.c -LD -MT -D_URSDLL /link %linker_flags% -EXPORT:load_assets -EXPORT:init_app -EXPORT:update_and_render /out:metaballs.dll
 
 cl /c %build_options% %compiler_flags% %includes% ..\lib\glfw3webgpu\glfw3webgpu.c
 cl /c %build_options% %compiler_flags% %includes% ..\src\glfw\glfw_wgpu.c

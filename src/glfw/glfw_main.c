@@ -34,6 +34,7 @@
 #include "glfw_app.h"
 
 #include "load.c"
+#include "shape.c"
 #include "renderer.c"
 #include "assets.c"
 
@@ -82,11 +83,14 @@ int main(int argc, char **argv)
                       render_func_names, ARRAY_COUNT(render_func_names),
                       build_dir, data_dir, name);
         
-        // NOTE(ajeej): Initialize app
-        app->funcs.init_app(plat_app);
+        
+        app->funcs.load_assets(&plat_app->am);
         
         // NOTE(ajeej): Update assets defined during initalization
         update_assets(&plat_app->am);
+        
+        // NOTE(ajeej): Initialize app
+        app->funcs.init_app(plat_app);
         
         // NOTE(ajeej): Initialize renderer
         app->render_funcs.init_renderer(app->window, &plat_app->rb, &plat_app->am);
@@ -101,12 +105,10 @@ int main(int argc, char **argv)
         glfwMakeContextCurrent(cur_app->window);
         
         app->render_funcs.start_frame(&plat_app->rb);
-        //start_frame(&plat_app->rb);
         
         cur_app->funcs.update_and_render(plat_app);
         
         app->render_funcs.end_frame(&plat_app->rb);
-        //end_frame(&plat_app->rb);
         
         glfwSwapBuffers(cur_app->window);
         glfwPollEvents();

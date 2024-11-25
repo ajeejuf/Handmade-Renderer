@@ -840,13 +840,10 @@ get_wgpu_texture_sample_type(u32 format)
         case TEXTURE_FORMAT_R16_FLOAT :
         case TEXTURE_FORMAT_RG8U_NORM :
         case TEXTURE_FORMAT_RG8S_NORM :
-        case TEXTURE_FORMAT_R32_FLOAT :
         case TEXTURE_FORMAT_RG16_FLOAT :
         case TEXTURE_FORMAT_RGBA8U_NORM :
         case TEXTURE_FORMAT_RGBA8S_NORM :
-        case TEXTURE_FORMAT_RG32_FLOAT :
-        case TEXTURE_FORMAT_RGBA16_FLOAT :
-        case TEXTURE_FORMAT_RGBA32_FLOAT : {
+        case TEXTURE_FORMAT_RGBA16_FLOAT : {
             return WGPUTextureSampleType_Float;
         } break;
         
@@ -872,6 +869,17 @@ get_wgpu_texture_sample_type(u32 format)
         case TEXTURE_FORMAT_RGBA16S_INT :
         case TEXTURE_FORMAT_RGBA32S_INT : {
             return WGPUTextureSampleType_Sint;
+        } break;
+        
+        case TEXTURE_FORMAT_R32_FLOAT :
+        case TEXTURE_FORMAT_RG32_FLOAT :
+        case TEXTURE_FORMAT_RGBA32_FLOAT : {
+            return WGPUTextureSampleType_UnfilterableFloat;
+        } break;
+        
+        
+        default: {
+            ASSERT_LOG(0, "Invalid sampler type.");
         } break;
     }
     

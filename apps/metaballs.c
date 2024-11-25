@@ -12,39 +12,74 @@
 #include "app.h"
 #include "app_funcs.h"
 
+#include "shape.c"
 #include "renderer.c"
 #include "assets.c"
-#include "shape.c"
 #include "entity.c"
 
-typedef struct metaballs_t {
+/*typedef struct metaballs_t {
     u32 *e_ids;
     u32 count;
     
     v3 color;
 } metaballs_t;
 
-metaballs_t metaballs;
+metaballs_t metaballs;*/
 
-v3 metaball_colors[4];
+typedef struct screen_grid_t {
+    u32 width, height;
+    u32 res, max_res;
+    f32 thickness;
+    f32 aspect;
+    
+    u32 mesh_id;
+    
+    u32 line_count;
+    
+    u32 trans_count;
+    mat4 *trans;
+} screen_grid_t;
 
-u8 *tex_data, *g_tex_data, *fb_data, *prev_fb_data;
-u32 width = 256, height = 256;
+typedef struct metaballs_t {
+    v2 *pos;
+    v2 *vel;
+    f32 *rad;
+    
+    u32 mesh_id;
+    
+    u32 count;
+    u32 max;
+    
+    v2 top_left, btm_right;
+    
+    v3 color;
+    
+    mat4 *trans;
+} metaballs_t;
 
-u32 df_tex_id, gdf_tex_id, fb_id, prev_fb_id, sampler_id;
+u32 c_ids[3];
+
+u32 font_asset_id;
+u32 font_id;
+u32 text_shader_id;
+u32 grid_shader_id;
+u32 circle_tex_shader_id;
+u32 circle_shader_id;
+
+u8 *c_tex_data;
+
+u32 text_id;
 
 camera_t *cam;
 
-global f32 speed = 0.01f;
-
-global u32 c_ids[4];
+global u32 c_id[1];
 global u32 p_id[2];
-global u32 q_id;
-global u32 e_id[3];
 
-global u32 bg_ids[8];
+global screen_grid_t grid;
 
-internal void
+global metaballs_t metaballs;
+
+/*internal void
 process_input(app_t *app)
 {
     renderer_t *rb = &app->rb;
@@ -71,7 +106,7 @@ process_input(app_t *app)
 }
 
 internal void
-create_textures(renderer_t *rb)
+create_textures(renderer_t *rb, asset_manager_t *am)
 {
     // NOTE(ajeej): Add Textures
     tex_data = (u8 *)malloc(width*height*4);
@@ -105,6 +140,12 @@ create_textures(renderer_t *rb)
     sampler_id = add_sampler(rb, ADDRESS_MODE_CLAMPTOEDGE, 
                              ADDRESS_MODE_CLAMPTOEDGE, ADDRESS_MODE_CLAMPTOEDGE,
                              FILTER_LINEAR, FILTER_LINEAR);
+    
+    
+    font_asset_t *font = am->font_assets + font_id;
+    atlas_id = add_texture(rb, font->atlas_bitmap, font->atlas_w, font->atlas_h,
+                           TEXTURE_FORMAT_RGBA8U_NORM,
+                           TEXTURE_USAGE_COPY_DST | TEXTURE_USAGE_TEXTURE_BINDING);
 }
 
 internal void
@@ -309,7 +350,208 @@ clamp_entity_to_screen(app_t *app, u32 id)
     
     trans->Elements[3][0] = pos.X;
     trans->Elements[3][1] = pos.Y;
+}*/
+
+internal f32
+random_f32(f32 min, f32 max)
+{
+    return min + ((f32)rand() / RAND_MAX) * (max-min);
 }
+
+internal v2
+random_v2(f32 min, f32 max)
+{
+    return HMM_V2(random_f32(min, max), random_f32(min, max));
+}
+
+internal void
+random_f32_array(f32 *a, u32 count, f32 min, f32 max)
+{
+    for (u32 i = 0; i < count; i++)
+        a[i] = random_f32(min, max);
+}
+
+internal void
+random_v2_array(v2 *v, u32 count, f32 min, f32 max)
+{
+    for (u32 i = 0; i < count; i++)
+        v[i] = random_v2(min, max);
+}
+
+internal void
+update_screen_grid(screen_grid_t *grid, u32 res)
+{
+    if (res > grid->max_res) return;
+    
+    grid->res = res;
+    
+    f32 aspect = grid->aspect;
+    
+    f32 thickness = grid->thickness;
+    u32 x_res = res, y_res = (u32)((f32)res * aspect);
+    
+    grid->line_count = x_res + y_res - 2;
+    
+    f32 scale_x = 2.0f/x_res, scale_y = 2.0f/y_res;
+    mat4 *cur_trans = grid->trans;
+    for (u32 x = 1; x < x_res; x++)
+    {
+        update_transform(cur_trans, 
+                         HMM_V3(scale_x * x - 1.0f, 0.0f, 0.0f),
+                         HMM_V3(0.0f, 0.0f, 0.0f),
+                         HMM_V3((2.0f + thickness)/grid->width, 2.0f, 1.0f));
+        cur_trans++;
+    }
+    
+    for (u32 y = 1; y < y_res; y++)
+    {
+        update_transform(cur_trans, 
+                         HMM_V3(0.0f, scale_y * y - 1.0f, 0.0f),
+                         HMM_V3(0.0f, 0.0f, 180.0f),
+                         HMM_V3(2.0f, (2.0f + thickness)/grid->height, 1.0f));
+        cur_trans++;
+    }
+}
+
+internal screen_grid_t 
+create_screen_grid(renderer_t *rb, 
+                   u32 width, u32 height, 
+                   u32 res, u32 max_res, 
+                   f32 line_thickness)
+{
+    screen_grid_t grid = {0};
+    
+    grid.width = width;
+    grid.height = height;
+    grid.max_res = max_res;
+    grid.thickness = line_thickness;
+    grid.aspect = height/(f32)width;
+    
+    grid.mesh_id = create_quad(rb, HMM_V3(0.0f, 0.0f, 0.0f), HMM_V2(1.0f, 1.0f), HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
+    
+    f32 aspect = grid.aspect;
+    u32 line_count = max_res-1 + (u32)(max_res*aspect)-1;
+    grid.trans = (mat4 *)malloc(sizeof(mat4)*line_count);
+    grid.trans_count = line_count;
+    
+    update_screen_grid(&grid, res);
+    
+    return grid;
+}
+
+internal void
+update_metaballs(metaballs_t *metaballs)
+{
+    v2 pos;
+    f32 scale;
+    mat4 *trans = metaballs->trans;
+    for (u32 i = 0; i < metaballs->count; i++)
+    {
+        pos = metaballs->pos[i];
+        scale = metaballs->rad[i];
+        
+        update_transform(trans,
+                         HMM_V3(pos.X, pos.Y, 0.0f),
+                         HMM_V3(0.0f, 0.0f, 0.0f),
+                         HMM_V3(scale, scale, 1.0f));
+        
+        trans++;
+    }
+}
+
+internal metaballs_t
+create_metaballs(renderer_t *rb, v2 *pos, f32 *rad, u32 count, u32 max,
+                 v3 color, f32 width, f32 height)
+{
+    metaballs_t metaballs = {0};
+    
+    metaballs.pos = (v2 *)malloc(sizeof(v2)*max);
+    metaballs.rad = (f32 *)malloc(sizeof(f32)*max);
+    metaballs.vel = (v2 *)malloc(sizeof(v2)*max);
+    metaballs.count = count;
+    metaballs.max = max;
+    metaballs.color = color;
+    
+    metaballs.top_left = HMM_V2(-width/2, height/2);
+    metaballs.btm_right = HMM_V2(width/2, -height/2);
+    
+    metaballs.mesh_id = create_quad(rb, HMM_V3(0.0f, 0.0f, 0.0f), HMM_V2(2.0f, 2.0f), HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
+    
+    memcpy(metaballs.pos, pos, sizeof(v2)*count);
+    memcpy(metaballs.rad, rad, sizeof(f32)*count);
+    random_v2_array(metaballs.vel, count, -0.8, 0.8);
+    
+    metaballs.trans = (mat4 *)malloc(sizeof(mat4)*max);
+    
+    update_metaballs(&metaballs);
+    
+    return metaballs;
+}
+
+internal void
+update_metaballs_physics(metaballs_t *metaballs, f32 dt)
+{
+    v2 tl = metaballs->top_left, br = metaballs->btm_right;
+    f32 rad;
+    v2 pos, vel;
+    for (u32 i = 0; i < metaballs->count; i++)
+    {
+        pos = metaballs->pos[i];
+        vel = metaballs->vel[i];
+        rad = metaballs->rad[i];
+        
+        pos = HMM_AddV2(pos, HMM_MulV2F(vel, dt));
+        
+        if (pos.X - rad < tl.X) {
+            pos.X = tl.X + rad;
+            vel.X = -vel.X;
+        } else if (pos.X + rad > br.X) {
+            pos.X = br.X - rad;
+            vel.X = -vel.X;
+        }
+        
+        if (pos.Y - rad < br.Y) {
+            pos.Y = br.Y + rad;
+            vel.Y = -vel.Y;
+        } else if (pos.Y + rad > tl.Y) {
+            pos.Y = tl.Y - rad;
+            vel.Y = -vel.Y;
+        }
+        
+        metaballs->pos[i] = pos;
+        metaballs->vel[i] = vel;
+    }
+    
+    update_metaballs(metaballs);
+}
+
+internal void
+render_screen_grid(renderer_t *rb, screen_grid_t grid)
+{
+    f32 aspect = grid.height/(f32)grid.width;
+    u32 line_count = grid.res-1 + (u32)(grid.res*aspect)-1;
+    
+    push_render_cmd(rb, grid.mesh_id, 0, 0, line_count);
+}
+
+internal void
+render_metaball_circles(renderer_t *rb, metaballs_t metaballs)
+{
+    push_render_cmd(rb, metaballs.mesh_id, 0, 0, metaballs.count);
+}
+
+LOAD_ASSETS(load_assets)
+{
+    text_shader_id = add_shader(am, "text_test.wgsl", VERTEX_FRAGMENT_SHADER);
+    grid_shader_id = add_shader(am, "grid.wgsl", VERTEX_FRAGMENT_SHADER);
+    circle_tex_shader_id = add_shader(am, "circle.wgsl", COMPUTE_SHADER);
+    circle_shader_id = add_shader(am, "render_circle.wgsl", VERTEX_FRAGMENT_SHADER);
+    
+    font_asset_id = add_font(am, "fonts\\hack\\Hack-Regular.ttf", 1024*5, 1024*5, ' ', '~'-' ', 64*5);
+}
+
+global u32 q_id;
+global u32 t_id;
 
 INIT_APP(init_app)
 {
@@ -318,54 +560,103 @@ INIT_APP(init_app)
     renderer_t *rb = &app->rb;
     asset_manager_t *am = &app->am;
     
-    cam = add_camera(rb, HMM_V3(0.0f, 0.0f, 10.0f));
+    cam = add_camera(rb, HMM_V3(0.0f, 0.0f, 10.0f), 20.0f, 45.0f, 1.0f, 100.0f);
     
-    // NOTE(ajeej): Add shaders
-    u32 s_df_id = add_shader(rb, am, "metaball_distance_field.wgsl", COMPUTE_SHADER);
-    u32 s_g_id = add_shader(rb, am, "gaussian_blur.wgsl", COMPUTE_SHADER);
-    u32 s_c_id = add_shader(rb, am, "clear.wgsl", COMPUTE_SHADER);
-    u32 s_id = add_shader(rb, am, "metaballs.wgsl", VERTEX_FRAGMENT_SHADER);
-    u32 s_f_id = add_shader(rb, am, "metaball_filter.wgsl", VERTEX_FRAGMENT_SHADER);
+    font_id = process_font_asset(rb, am, font_asset_id);
     
-    // NOTE(ajeej): Create meshes
-    q_id = create_quad(rb, HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
+    v2 pos[10];
+    f32 rad[10];
+    random_v2_array(pos, 10, -12, 10);
+    random_f32_array(rad, 10, 1.0, 2.0);
     
-    metaball_colors[0] = HMM_V3(1.0f, 0.2f, 0.0f);
-    metaball_colors[1] = HMM_V3(0.0f, 0.3f, 1.0f);
-    metaball_colors[2] = HMM_V3(1.0f, 0.1f, 1.0f);
-    metaball_colors[3] = HMM_V3(1.0f, 0.4f, 1.0f);
+    metaballs = create_metaballs(rb, pos, rad, 10, 20, HMM_V3(1.0f, 0.4, 0.0f),
+                                 20.0f * rb->width/(f32)rb->height, 20.0f);
     
-    create_metaball(app, q_id, 0);
+    grid = create_screen_grid(rb, rb->width, rb->height, 16, 80, 1.0f);
     
-    metaballs = create_metaballs(app, 10, q_id, 0);
+    update_screen_grid(&grid, 32);
     
-    create_textures(rb);
+    //text_id = add_text(app, font_id, strlen("Hello World"), HMM_V3(0.0f, 0.0f, 0.0f), 1.0f/800.0f);
+    
+    
+    /*u32 w = grid.res, h = grid.res*grid.aspect;
+    u8 *tex_data = (u8 *)malloc(w*h*4);
+    memset(tex_data, 0, w*h*4);
+    u32 grid_tex = add_texture(rb, tex_data, w, h, TEXTURE_FORMAT_RGBA8U_NORM, 
+                               TEXTURE_USAGE_COPY_SRC | TEXTURE_USAGE_STORAGE_BINDING);*/
+    
+    
+    u32 ct_w = 256, ct_h = 256;
+    c_tex_data = (u8 *)malloc(ct_w*ct_h*4);
+    memset(c_tex_data, 0, ct_w*ct_h*4);
+    u32 circle_tex = add_texture(rb, c_tex_data, ct_w, ct_h, TEXTURE_FORMAT_RGBA8U_NORM,
+                                 TEXTURE_USAGE_COPY_SRC | TEXTURE_USAGE_STORAGE_BINDING |
+                                 TEXTURE_USAGE_COPY_DST | TEXTURE_USAGE_TEXTURE_BINDING);
+    
     
     u32 vb_id = add_vertex_buffer(rb, rb->verts, get_stack_count(rb->verts),
                                   ATTRIBUTE_VERTEX, 0, MODE_VERTEX);
     
-    create_uniforms(rb);
     
-    blend_comp_t blends[3] = {
-        { BLEND_FACTOR_ONE, BLEND_FACTOR_ONE, BLEND_OP_ADD },
-        { BLEND_FACTOR_SRCALPHA, BLEND_FACTOR_ONEMINUSSRCALPHA, BLEND_OP_ADD },
-        { BLEND_FACTOR_ONE, BLEND_FACTOR_ZERO, BLEND_OP_ADD },
-    };
+    u32 ub_ids[2];
+    bind_layout_t c_layout[6];
+    bind_layout_t ct_layout[1];
+    bind_layout_t g_layout[1];
     
-    // NOTE(ajeej): Add Pipelines
-    c_ids[0] = add_compute_pipeline(rb, s_df_id, bg_ids, 1, 32, 32, 1);
-    c_ids[1] = add_compute_pipeline(rb, s_g_id, bg_ids+1, 1, 32, 32, 1);
-    c_ids[2] = add_compute_pipeline(rb, s_c_id, bg_ids+2, 1, (rb->width+15)/16, (rb->height+15)/16, 1);
-    c_ids[3] = add_compute_pipeline(rb, s_c_id, bg_ids+3, 1, (rb->width+15)/16, (rb->height+15)/16, 1);
+    u32 sampler_id = add_sampler(rb,  ADDRESS_MODE_CLAMPTOEDGE, 
+                                 ADDRESS_MODE_CLAMPTOEDGE, ADDRESS_MODE_CLAMPTOEDGE,
+                                 FILTER_LINEAR, FILTER_LINEAR);
     
-    p_id[0] = add_render_pipeline(rb, s_id, fb_id, 
-                                  HMM_V3(0.0, 0.0, 0.0), 
-                                  blends[2], blends[2],
-                                  &vb_id, 1, bg_ids+4, 3);
-    p_id[1] = add_render_pipeline(rb, s_f_id, 1, 
-                                  HMM_V3(0.0, 0.2, 0.5),
-                                  blends[1], blends[1],
-                                  &vb_id, 1, bg_ids+7, 1);
+    ub_ids[0] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_UNIFORM);
+    ub_ids[1] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_STORAGE);
+    
+    u32 ct_ids[1], g_ids[2];
+    c_ids[0] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    c_ids[1] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    c_ids[2] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    
+    ct_ids[0] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    
+    g_ids[0] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    g_ids[1] = add_bind_group(rb, BIND_GROUP_TYPE_FRAME);
+    
+    ct_layout[0] = get_storage_texture_bind_layout(0, SHADER_VISIBILITY_COMPUTE, circle_tex, TEXTURE_ACCESS_WRITEONLY);
+    
+    add_bind_layouts(rb, ct_ids[0], ct_layout, 1);
+    
+    
+    c_layout[0] = get_texture_bind_layout(0, SHADER_VISIBILITY_FRAGMENT, circle_tex);
+    c_layout[1] = get_sampler_bind_layout(1, SHADER_VISIBILITY_FRAGMENT, sampler_id, SAMPLER_TYPE_FILTERING);
+    c_layout[2] = get_buffer_bind_layout_for_struct(&cam->orth, 0, SHADER_VISIBILITY_VERTEX, 
+                                                    ub_ids[0], BUFFER_TYPE_UNIFORM);
+    c_layout[3] = get_buffer_bind_layout_for_struct(&cam->view, 1, SHADER_VISIBILITY_VERTEX,
+                                                    ub_ids[0], BUFFER_TYPE_UNIFORM);
+    c_layout[4] = get_buffer_bind_layout_for_struct(&metaballs.color, 2, SHADER_VISIBILITY_FRAGMENT,
+                                                    ub_ids[0], BUFFER_TYPE_UNIFORM);
+    c_layout[5] = get_buffer_bind_layout_for_array(metaballs.trans, metaballs.count, 0, SHADER_VISIBILITY_VERTEX,
+                                                   ub_ids[1], BUFFER_TYPE_READ_ONLY_STORAGE);
+    
+    add_bind_layouts(rb, c_ids[0], c_layout, 2);
+    add_bind_layouts(rb, c_ids[1], c_layout+2, 3);
+    add_bind_layouts(rb, c_ids[2], c_layout+5, 1);
+    
+    
+    g_layout[0] = get_buffer_bind_layout_for_array(grid.trans, grid.trans_count, 0, SHADER_VISIBILITY_VERTEX,
+                                                   ub_ids[1], BUFFER_TYPE_READ_ONLY_STORAGE);
+    
+    g_ids[0] = c_ids[1];
+    add_bind_layouts(rb, g_ids[1], g_layout, 1);
+    
+    
+    c_id[0] = add_compute_pipeline(rb, circle_tex_shader_id, ct_ids, 1, ct_w/16.0f, ct_h/16.0f, 1);
+    
+    blend_comp_t blend = (blend_comp_t){ BLEND_FACTOR_SRCALPHA, BLEND_FACTOR_ONEMINUSSRCALPHA, BLEND_OP_ADD };
+    
+    p_id[0] = add_render_pipeline(rb, circle_shader_id, 1, HMM_V3(0.0f, 0.0f, 0.5f),
+                                  blend, blend, &vb_id, 1, c_ids, 3);
+    
+    p_id[1] = add_render_pipeline(rb, grid_shader_id, 1, HMM_V3(0.0f, 0.0f, 0.0f),
+                                  blend, blend, &vb_id, 1, g_ids, 2);
     
 }
 
@@ -373,48 +664,24 @@ UPDATE_AND_RENDER(update_and_render)
 {
     renderer_t *rb = &app->rb;
     
-    process_input(app);
+    update_bind_group_layout(rb, c_ids[2], 0);
     
-    for (u32 i = 0; i < metaballs.count; i++)
-        update_entity_physics(app, metaballs.e_ids[i], 0.02);
+    update_metaballs_physics(&metaballs, 0.02);
     
-    for (u32 i = 0; i < metaballs.count; i++)
-        clamp_entity_to_screen(app, metaballs.e_ids[i]);
-    
-    submit_compute_pipeline(rb, c_ids[0]);
-    submit_compute_pipeline(rb, c_ids[1]);
-    submit_compute_pipeline(rb, c_ids[2]);
-    submit_compute_pipeline(rb, c_ids[3]);
+    submit_compute_pipeline(rb, c_id[0]);
     
     start_render_pipeline(rb, p_id[0]);
     {
-        render_entity(app, 0);
+        clear_color(rb, HMM_V3(0.0f, 0.2f, 0.5f));
+        
+        render_metaball_circles(rb, metaballs);
     }
     end_render_pipeline(rb);
     
-    copy_texture(rb, fb_id, 0, 0, prev_fb_id, 0, 0, rb->width, rb->height);
-    
-    start_render_pipeline(rb, p_id[0]);
-    {
-        for (u32 i = 0; i < 10; i++)
-            render_entity(app, metaballs.e_ids[i]);
-    }
-    end_render_pipeline(rb);
-    
-    /*copy_texture(rb, fb_id, 0, 0, prev_fb_id, 0, 0, rb->width, rb->height);
-    
-    start_render_pipeline(rb, p_id[0]);
-    {
-        for (u32 i = 5; i < 10; i++)
-            render_entity(app, metaballs.e_ids[i]);
-    }
-    end_render_pipeline(rb);
-    
-    copy_texture(rb, fb_id, 0, 0, prev_fb_id, 0, 0, rb->width, rb->height);*/
     
     start_render_pipeline(rb, p_id[1]);
     {
-        push_render_cmd(&app->rb, q_id, 0, 0);
+        render_screen_grid(rb, grid);
     }
     end_render_pipeline(rb);
     

@@ -45,6 +45,8 @@ typedef struct app_t {
     STACK(entity_t) *entities;
     STACK(physic_comp_t) *physics;
     
+    STACK(text_t) *texts;
+    
     input_t input;
 } app_t;
 
