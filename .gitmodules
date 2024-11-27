@@ -10,6 +10,3 @@
 [submodule "lib/glfw3webgpu"]
 	path = lib/glfw3webgpu
 	url = https://github.com/eliemichel/glfw3webgpu.git
-[submodule "lib/dawn"]
-	path = lib/dawn
-	url = https://dawn.googlesource.com/dawn
