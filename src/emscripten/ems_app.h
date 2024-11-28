@@ -4,8 +4,12 @@ typedef struct ems_app_t {
     loaded_code_t code;
     app_func_table_t funcs;
     
+    loaded_code_t render_code;
+    render_function_table_t render_funcs;
+    
     // NOTE(ajeej): WebGL
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx;
+    const char *canvas;
     
     // NOTE(ajeej): Platform Indepent App
     app_t plat_app;

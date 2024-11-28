@@ -1,4 +1,56 @@
 
+#if __EMSCRIPTEN__
+
+#define WGPUStatus_Success WGPUWaitStatus_Success
+
+#define WGPUStringView const char *
+
+internal const char *
+get_wgpu_str(WGPUStringView str)
+{
+    return str;
+}
+
+internal WGPUStringView
+make_wgpu_str(const char *str)
+{
+    return str;
+}
+
+internal WGPUStringView
+make_wgpu_str_n(const char *str, u64 n)
+{
+    return str;
+}
+
+#else
+
+internal const char *
+get_wgpu_str(WGPUStringView str)
+{
+    return str.data;
+}
+
+internal WGPUStringView
+make_wgpu_str(const char *str)
+{
+    return (WGPUStringView) {
+        .data = str,
+        .length = strlen(str)
+    };
+}
+
+internal WGPUStringView
+make_wgpu_str_n(const char *str, u64 n)
+{
+    return (WGPUStringView) {
+        .data = str,
+        .length = n
+    };
+}
+
+#endif
+
 typedef struct request_adapter_callback_data_t {
     WGPUAdapter adapter;
     b8 request_ended;
@@ -9,9 +61,30 @@ typedef struct request_device_callback_data_t {
     b8 request_ended;
 } request_device_callback_data_t;
 
+#if __EMSCRIPTEN__
+
 internal void
-request_adapter_callback(WGPURequestAdapterStatus status, WGPUAdapter adapter,
-                         char const *message, void *user_data)
+device_lost_callback(WGPUDeviceLostReason reason, char const *message, void *user_data)
+{
+    LOG("Device lost: reason");
+    if (message) {
+        LOG("(%s)", message);
+    }
+}
+
+internal void
+uncaptured_error_callback(WGPUErrorType type, char const *message, void *user_data)
+{
+    LOG("Uncaptured device error: type %d", type);
+    if (message) {
+        LOG("(%s)", message);
+    }
+}
+
+#else
+
+void request_adapter_callback(WGPURequestAdapterStatus status, WGPUAdapter adapter,
+                              char const *message, void *user_data)
 {
     request_adapter_callback_data_t *data = (request_adapter_callback_data_t *)user_data;
     
@@ -24,9 +97,9 @@ request_adapter_callback(WGPURequestAdapterStatus status, WGPUAdapter adapter,
     data->request_ended = 1;
 }
 
-internal void
-request_device_callback(WGPURequestDeviceStatus status, WGPUDevice device,
-                        char const *message, void *user_data)
+
+void request_device_callback(WGPURequestDeviceStatus status, WGPUDevice device,
+                             char const *message, void *user_data)
 {
     request_device_callback_data_t *data = (request_device_callback_data_t *)user_data;
     
@@ -57,10 +130,14 @@ uncaptured_error_callback(WGPUErrorType type, char const *message, void *user_da
     }
 }
 
+#endif
+
 internal WGPUAdapter
-request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const *options)
+request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const *options, void *request_adapter_callback)
 {
     request_adapter_callback_data_t rac_data = {0};
+    
+    LOG("request_adapter_callback: %p", request_adapter_callback);
     
     wgpuInstanceRequestAdapter(instance, options,
                                request_adapter_callback,
@@ -69,7 +146,7 @@ request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const *options)
 #if __EMSCRIPTEN__
     while (!rac_data.request_ended) {
         LOG("Requesting adapter...");
-        emscripten_sleep(100);
+        emscripten_sleep(200);
     }
 #endif
     
@@ -122,6 +199,7 @@ log_adapter_features(WGPUAdapter adapter)
 internal void
 log_adapter_info(WGPUAdapter adapter)
 {
+    
     WGPUAdapterInfo info = {0};
     info.nextInChain = NULL;
     
@@ -129,18 +207,18 @@ log_adapter_info(WGPUAdapter adapter)
     
     LOG("Adapter properties:");
     LOG(" - vendorID: %d", info.vendorID);
-    if (info.vendor) {
-        LOG(" - vendorName: %s", info.vendor);
+    if (get_wgpu_str(info.vendor)) {
+        LOG(" - vendorName: %s", get_wgpu_str(info.vendor));
     }
-    if (info.architecture) {
-        LOG(" - architecture: %s", info.architecture);
+    if (get_wgpu_str(info.architecture)) {
+        LOG(" - architecture: %s", get_wgpu_str(info.architecture));
     }
     LOG(" - deviceID: %d", info.deviceID);
-    if (info.device) {
-        LOG(" - name: %s", info.device);
+    if (get_wgpu_str(info.device)) {
+        LOG(" - name: %s", get_wgpu_str(info.device));
     }
-    if (info.description) {
-        LOG(" - driverDescription: %s", info.description);
+    if (get_wgpu_str(info.description)) {
+        LOG(" - driverDescription: %s", get_wgpu_str(info.description));
     }
     LOG(" - adapterType: %#x", info.adapterType);
     LOG(" - backendType: %#x", info.backendType);
@@ -206,7 +284,8 @@ log_device_limits(WGPUDevice device)
 }
 
 internal WGPUDevice
-request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const *descriptor)
+request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const *descriptor,
+               void *request_device_callback)
 {
     request_device_callback_data_t rdc_data = {0};
     
@@ -226,23 +305,7 @@ request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const *descriptor)
     return rdc_data.device;
 }
 
-internal WGPUStringView
-make_wgpu_str(const char *str)
-{
-    return (WGPUStringView) {
-        .data = str,
-        .length = strlen(str)
-    };
-}
 
-internal WGPUStringView
-make_wgpu_str_n(const char *str, u64 n)
-{
-    return (WGPUStringView) {
-        .data = str,
-        .length = n
-    };
-}
 
 internal u32
 get_wgpu_vertex_format(u32 type)
@@ -843,7 +906,9 @@ get_wgpu_texture_sample_type(u32 format)
         case TEXTURE_FORMAT_RG16_FLOAT :
         case TEXTURE_FORMAT_RGBA8U_NORM :
         case TEXTURE_FORMAT_RGBA8S_NORM :
-        case TEXTURE_FORMAT_RGBA16_FLOAT : {
+        case TEXTURE_FORMAT_RGBA16_FLOAT :
+        case TEXTURE_FORMAT_BGRA8U_NORM:
+        case TEXTURE_FORMAT_BGRA8U_NORM_SRGB: {
             return WGPUTextureSampleType_Float;
         } break;
         
@@ -947,6 +1012,91 @@ get_wgpu_mipmap_filter_mode(u32 mode)
     }
 }
 
+#if __EMSCRIPTEN__
+
+internal u32
+get_wgpu_blend_factor(u32 factor)
+{
+    switch (factor)
+    {
+        case BLEND_FACTOR_ZERO: {
+            return WGPUBlendFactor_Zero;
+        } break;
+        
+        case BLEND_FACTOR_ONE: {
+            return WGPUBlendFactor_One;
+        } break;
+        
+        case BLEND_FACTOR_SRC: {
+            return WGPUBlendFactor_Src;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC: {
+            return WGPUBlendFactor_OneMinusSrc;
+        } break;
+        
+        case BLEND_FACTOR_SRCALPHA: {
+            return WGPUBlendFactor_SrcAlpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRCALPHA: {
+            return WGPUBlendFactor_OneMinusSrcAlpha;
+        } break;
+        
+        case BLEND_FACTOR_DST: {
+            return WGPUBlendFactor_Dst;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSDST: {
+            return WGPUBlendFactor_OneMinusDst;
+        } break;
+        
+        case BLEND_FACTOR_DSTALPHA: {
+            return WGPUBlendFactor_DstAlpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSDSTALPHA: {
+            return WGPUBlendFactor_OneMinusDstAlpha;
+        } break;
+        
+        case BLEND_FACTOR_SRCALPHASATURATED: {
+            return WGPUBlendFactor_SrcAlphaSaturated;
+        } break;
+        
+        case BLEND_FACTOR_CONSTANT: {
+            return WGPUBlendFactor_Constant;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSCONSTANT: {
+            return WGPUBlendFactor_OneMinusConstant;
+        } break;
+        
+        /*case BLEND_FACTOR_SRC1: {
+            return WGPUBlendFactor_Src1;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC1: {
+            return WGPUBlendFactor_OneMinusSrc1;
+        } break;
+        
+        case BLEND_FACTOR_SRC1ALPHA: {
+            return WGPUBlendFactor_Src1Alpha;
+        } break;
+        
+        case BLEND_FACTOR_ONEMINUSSRC1ALPHA: {
+            return WGPUBlendFactor_OneMinusSrc1Alpha;
+        } break;*/
+        
+        default: {
+            ASSERT_LOG(0, "Invalid Blend Factor.");
+        } break;
+    }
+    
+    return 0;
+}
+
+#else
+
 internal u32
 get_wgpu_blend_factor(u32 factor)
 {
@@ -1027,6 +1177,8 @@ get_wgpu_blend_factor(u32 factor)
     
     return 0;
 }
+
+#endif
 
 internal u32
 get_wgpu_blend_op(u32 op)

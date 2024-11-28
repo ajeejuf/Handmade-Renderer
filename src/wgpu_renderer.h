@@ -38,6 +38,8 @@ typedef struct wgpu_renderer_t {
     
     WGPUTextureView target_view;
     WGPUCommandEncoder encoder;
+    
+    void *adapter_callback;
 } wgpu_renderer_t;
 
 #endif //WGPU_RENDERER_H

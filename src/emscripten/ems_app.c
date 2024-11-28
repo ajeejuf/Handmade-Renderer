@@ -69,8 +69,11 @@ ems_mouse_callback(int eventType, const EmscriptenMouseEvent *e, void *user_data
 
 
 internal void
-init_ems_app(ems_app_t *app, const char **app_func_names, u32 func_count,
-             const char *build_dir, const char *name, const char *canvas)
+init_ems_app(ems_app_t *app, 
+             const char **app_func_names, u32 app_func_count,
+             const char **render_func_names, u32 render_func_count,
+             const char *build_dir, const char *data_dir,
+             const char *name, const char *canvas)
 {
     char *full_canvas;
     
@@ -79,38 +82,41 @@ init_ems_app(ems_app_t *app, const char **app_func_names, u32 func_count,
     // NOTE(ajeej): Load app code
     {
         init_loaded_code(&app->code, (void **)&app->funcs,
-                         app_func_names, func_count,
+                         app_func_names, app_func_count,
                          build_dir, name, "wasm", 0);
         load_code(&app->code);
         ASSERT_LOG(app->code.is_valid, "Error: Failed to load %s.wasm", name);
     }
     
-    // NOTE(ajeej): Create WebGL Context
+    // NOTE(ajeej): Load render code
+    {
+        init_loaded_code(&app->render_code, (void **)&app->render_funcs,
+                         render_func_names, render_func_count,
+                         build_dir, "ems_wgpu", "wasm", 0);
+        load_code(&app->render_code);
+        ASSERT_LOG(app->code.is_valid, "Error: Failed to load em_wgpu");
+    }
+    
+    // NOTE(ajeej): Create Context
     {
         const char *temp[2] = { "#", canvas };
         full_canvas = cstr_make((const char **)temp, 2);
         LOG("CANVAS: %s", full_canvas);
-        EmscriptenWebGLContextAttributes attribs = {0};
+        /*EmscriptenWebGLContextAttributes attribs = {0};
         emscripten_webgl_init_context_attributes(&attribs);
         attribs.majorVersion = 2;
         
         app->ctx = emscripten_webgl_create_context(full_canvas, &attribs);
+        
         ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
-        emscripten_webgl_make_context_current(app->ctx);
+        emscripten_webgl_make_context_current(app->ctx);*/
     }
-    
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
     
     // NOTE(ajeej): Init Plat App
     i32 w, h;
     emscripten_get_canvas_element_size(full_canvas, &w, &h);
     LOG("Width: %d  Height: %d", w, h);
-    init_plat_app(&app->plat_app, w, h);
+    init_plat_app(&app->plat_app, w, h, (char *)data_dir);
     
     // NOTE(ajeej): Set emscripten callbacks
     {
@@ -132,7 +138,7 @@ init_ems_app(ems_app_t *app, const char **app_func_names, u32 func_count,
         emscripten_set_mouseout_callback(full_canvas, input, 1, ems_mouse_callback);
     }
     
-    free(full_canvas);
+    app->canvas = full_canvas;
 }
 
 internal void

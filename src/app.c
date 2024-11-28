@@ -13,5 +13,5 @@ init_plat_app(app_t *app, i32 width, i32 height, char *data_dir)
 internal void
 free_plat_app(app_t *app)
 {
-    free_renderer(&app->rb);
+    free_app_renderer(&app->rb);
 }

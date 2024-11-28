@@ -39,10 +39,10 @@ load_shader_asset(char *data_dir, shader_entry_t entry)
     u32 type;
     
     path[0] = 0;
-    cstr_cat_many(path, data_dir, "shaders\\", entry.fn);
+    cstr_cat_many(path, data_dir, "shaders/", entry.fn);
     type = entry.type;
     
-    code = read_file(path, NULL);
+    code = (char *)read_file(path, NULL);
     
     get_extension(ext, path);
     
@@ -83,7 +83,7 @@ load_font_asset(char *data_dir, font_entry_t entry)
     path[0] = 0;
     
     cstr_cat_many(path, data_dir, entry.fn);
-    u8 *font_data = read_file(path, NULL);
+    u8 *font_data = (u8 *)read_file(path, NULL);
     
     i32 font_count = stbtt_GetNumberOfFonts(font_data);
     if (font_count == -1)

@@ -2,17 +2,18 @@
 
 setlocal enabledelayedexpansion
 
-set md=..\..
+set md=.
 set lib_dir=.\lib
 set inc_dir=.\include
 
 set includes=-I%inc_dir% -I.\src
-set libs=-L%lib_dir%
+set libs=-L%lib_dir% 
 
 set "pre_files=--preload-file .\data@data"
 
-set main_compile_flags=-Wno-varargs -sMAIN_MODULE=2 -sFULL_ES3=1 -sUSE_WEBGL2=1 -sWASM=1 -sGL_ASSERTIONS=1 -sMIN_WEBGL_VERSION=2 -sEXPORTED_FUNCTIONS="_main,_realloc,_memset,_free,_sinf,_cosf,_atanf,_acosf,_memcpy,_strlen,_rand,_time,_getTempRet0,_srand,_stderr" -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=32MB
-set side_compile_flags=-Wno-varargs -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_init_app,_update_and_render"
+set main_compile_flags=-Wno-varargs -sMAIN_MODULE=2 -sUSE_WEBGPU=1 -sWASM=1 -sASYNCIFY=1 -sEXPORTED_FUNCTIONS="_main,_realloc,_memset,_free,_sinf,_cosf, _tanf,_emscripten_sleep,  _atanf,_acosf,_memcpy,_strlen,_rand,_time,_getTempRet0,_srand,_stderr,_fprintf, _wgpuCreateInstance,_wgpuInstanceCreateSurface,_wgpuInstanceRequestAdapter,_wgpuAdapterGetInfo, _wgpuAdapterGetLimits,_wgpuAdapterRequestDevice,_wgpuDeviceSetUncapturedErrorCallback, _wgpuDeviceGetLimits,_wgpuDeviceGetQueue,_wgpuSurfaceGetCapabilities,_wgpuSurfaceConfigure, _wgpuSurfaceCapabilitiesFreeMembers,_wgpuAdapterRelease,_wgpuDeviceCreateShaderModule, _wgpuDeviceCreateBindGroupLayout,_wgpuDeviceCreatePipelineLayout,_wgpuDeviceCreateRenderPipeline, _wgpuPipelineLayoutRelease,_wgpuDeviceCreateComputePipeline,_wgpuDeviceCreateBuffer, _wgpuDeviceCreateTexture,_wgpuQueueWriteTexture,_wgpuDeviceCreateSampler,_wgpuDeviceCreateBindGroup, _wgpuSurfaceGetCurrentTexture,_wgpuTextureViewRelease,_wgpuDeviceCreateCommandEncoder, _wgpuQueueWriteBuffer,_wgpuCommandEncoderBeginComputePass,_wgpuComputePassEncoderSetPipeline, _wgpuComputePassEncoderSetBindGroup,_wgpuComputePassEncoderDispatchWorkgroups,_wgpuComputePassEncoderEnd, _wgpuTextureCreateView,_wgpuComputePassEncoderRelease,_wgpuCommandEncoderBeginRenderPass, _wgpuRenderPassEncoderSetPipeline,_wgpuRenderPassEncoderSetVertexBuffer,_wgpuRenderPassEncoderSetIndexBuffer, _wgpuRenderPassEncoderSetBindGroup,_wgpuRenderPassEncoderDrawIndexed,_wgpuRenderPassEncoderEnd, _wgpuRenderPassEncoderRelease,_wgpuCommandEncoderFinish,_wgpuCommandEncoderRelease,_wgpuQueueSubmit, _wgpuCommandBufferRelease" -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=32MB -sASYNCIFY_STACK_SIZE=320000000
+set side_compile_flags=-Wno-varargs -sSIDE_MODULE=2 -sASYNCIFY=1 -sEXPORTED_FUNCTIONS="_load_assets,_init_app,_update_and_render"
+set renderer_compile_flags=-Wno-varargs -sSIDE_MODULE=2 -sUSE_WEBGPU=1 -sWASM=1 -sASYNCIFY=1 -sEXPORTED_FUNCTIONS="_init_renderer,_start_frame,_end_frame"
 
 set "template_dir=template"
 set "app_dir=apps"
@@ -26,6 +27,9 @@ if "%~1"=="" goto :endparse
 
 if "%~1"=="--templates" (
 	set "template_dir=%md%\%~2"
+
+	echo Set template_dir: %template_dir%
+
 	shift
 	shift
 	goto :parse
@@ -33,6 +37,9 @@ if "%~1"=="--templates" (
 
 if "%~1"=="--apps" (
 	set "app_dir=%md%\%~2"
+
+	echo Set app_dir: %app_dir%
+
 	shift
 	shift
 	goto :parse
@@ -40,6 +47,9 @@ if "%~1"=="--apps" (
 
 if "%~1"=="--output" (
 	set "out_dir=%~2"
+
+	echo Set out_dir: %out_dir%
+
 	shift
 	shift
 	goto :parse
@@ -47,6 +57,9 @@ if "%~1"=="--output" (
 
 if "%~1"=="--wasm" (
 	set "wasm_dir=%~2"
+
+	echo Set wasm_dir: %wasm_dir%
+
 	shift
 	shift
 	goto :parse
@@ -92,6 +105,10 @@ for %%F in ("%app_dir%\*.c") do (
 	)
 )
 
+call emcc .\src\emscripten\ems_wgpu.c -o .\%wasm_dir%\ems_wgpu.wasm %includes%  %renderer_compile_flags%
+set "pre_files=!pre_files! --preload-file .\%wasm_dir%\ems_wgpu.wasm@ems_wgpu.wasm"
+
+echo !pre_files!
 
 
 for %%F in ("%template_dir%\*.html") do (
