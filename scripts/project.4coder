@@ -26,7 +26,7 @@ webgpu_build = ".\webgpu_build.bat";
 webgpu_debug = ".\webgpu_debug.bat";
 win32_build = ".\win32_build.bat triangle demo";
 win32_debug = ".\win32_debug.bat";
-ems_build = ".\ems_build.bat";
+ems_build = ".\ems_build.bat --template template --apps apps --output build --wasm build";
 ems_run = ".\ems_run.bat";
 
 command_list = {
@@ -58,3 +58,4 @@ command_list = {
 
 fkey_command[1] = "webgpu_build";
 fkey_command[2] = "webgpu_debug";
+fkey_command[3] = "ems_build";

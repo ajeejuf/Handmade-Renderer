@@ -120,6 +120,135 @@ init_app_renderer(renderer_t *rb, i32 width, i32 height)
     add_texture(rb, NULL, 0, 0, 0, 0);
 }
 
+internal void
+free_render_pipeline(render_pipeline_t *rp)
+{
+    if (rp == NULL) return;
+    
+    if (rp->vb_layout_ids)
+        free(rp->vb_layout_ids);
+    
+    if (rp->bg_layout_ids)
+        free(rp->bg_layout_ids);
+    
+    if (rp->bg_const_ids)
+        stack_free(rp->bg_const_ids);
+    
+    if (rp->bg_frame_ids)
+        stack_free(rp->bg_frame_ids);
+    
+    if (rp->bg_draw_ids)
+        stack_free(rp->bg_draw_ids);
+}
+
+internal void
+free_compute_pipeline(compute_pipeline_t *cp)
+{
+    if (cp == NULL) return;
+    
+    if (cp->bg_layout_ids)
+        free(cp->bg_layout_ids);
+}
+
+internal void
+free_vertex_buffer_layout(vertex_buffer_layout_t *vbl)
+{
+    if (vbl == NULL) return;
+    
+    if (vbl->attribs)
+        free(vbl->attribs);
+}
+
+internal void
+free_font_info(font_info_t *fi)
+{
+    if (fi == NULL) return;
+    
+    if (fi->xoff)
+        free(fi->xoff);
+    
+    if (fi->yoff)
+        free(fi->yoff);
+    
+    if (fi->xadvance)
+        free(fi->xadvance);
+}
+
+internal void
+free_app_renderer(renderer_t *rb)
+{
+    u32 i;
+    for (i = 0; i < get_stack_count(rb->render_pipelines); i++)
+        free_render_pipeline(rb->render_pipelines+i);
+    
+    if (rb->render_pipelines)
+        stack_free(rb->render_pipelines);
+    
+    
+    for (i = 0; i < get_stack_count(rb->compute_pipelines); i++)
+        free_compute_pipeline(rb->compute_pipelines+i);
+    
+    if (rb->compute_pipelines)
+        stack_free(rb->compute_pipelines);
+    
+    
+    if (rb->samplers)
+        stack_free(rb->samplers);
+    
+    if (rb->textures)
+        stack_free(rb->textures);
+    
+    if (rb->buffers)
+        stack_free(rb->buffers);
+    
+    
+    for (i = 0; i < get_stack_count(rb->vb_layouts); i++)
+        free_vertex_buffer_layout(rb->vb_layouts+i);
+    
+    if (rb->vb_layouts)
+        stack_free(rb->vb_layouts);
+    
+    if (rb->bg_layouts)
+        stack_free(rb->vb_layouts);
+    
+    if (rb->cmds)
+        stack_free(rb->cmds);
+    
+    if (rb->bind_updates)
+        stack_free(rb->bind_updates);
+    
+    if (rb->verts)
+        stack_free(rb->verts);
+    
+    if (rb->indices)
+        stack_free(rb->indices);
+    
+    if (rb->render_cmds)
+        stack_free(rb->render_cmds);
+    
+    if (rb->mats)
+        stack_free(rb->mats);
+    
+    if (rb->meshes)
+        stack_free(rb->meshes);
+    
+    
+    for (i = 0; i < get_stack_count(rb->fonts); i++)
+        free_font_info(rb->fonts+i);
+    
+    if (rb->fonts)
+        stack_free(rb->fonts);
+    
+    if (rb->cams)
+        stack_free(rb->cams);
+    
+    if (rb->transforms)
+        stack_free(rb->transforms);
+    
+    if (rb->api)
+        free(rb->api);
+}
+
 internal u32
 process_font_asset(renderer_t *rb, asset_manager_t *am, u32 asset_id)
 {

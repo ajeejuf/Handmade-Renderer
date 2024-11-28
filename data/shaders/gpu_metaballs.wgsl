@@ -1,45 +1,47 @@
 
-@group(0) @binding(0) var<storage, read> metaball_pos: array<vec3f>;
+@group(0) @binding(0) var<storage, read> metaball_pos: array<vec4f>;
 @group(0) @binding(1) var<storage, read> metaball_radius: array<f32>;
 @group(0) @binding(2) var<uniform> metaball_count: u32;
-@group(0) @binding(3) var<uniform> res: vec2<u32>;
 
 @group(1) @binding(0) var framebuffer: texture_storage_2d<rgba8unorm, write>;
 
-@group(2) @binding(0) var view: mat4f;
-@group(2) @binding(1) var proj: mat4f;
-@group(3) @binding(2) var color: vec4f;
+@group(2) @binding(0) var<uniform> res: vec4<u32>;
 
 
-fn clip_to_screen(clip_pos: vec4f, dim: vec2<u32>) {
-	var ndc = clip_pos.xyz / clip_pos.w;
-	return (ndc.xy * 0.5 + 0.5) * vec2f(dim);
+fn point_length2(p0: vec2f, p1: vec2f) -> f32 {
+	let dx = p0.x - p1.x;
+	let dy = p0.y - p1.y;
+
+	return dx*dx + dy*dy;
 }
 
 @compute @workgroup_size(16, 16, 1)
 fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
+	
 	let dim = textureDimensions(framebuffer);
 
-	if (all(id.xy < dim)) {
-		
-		var final_color: vec3f = vec3f(0.0);
+	if (all(id.xy < dim.xy)) {
 
+		let px = vec2u(ceil(vec2f(dim.xy)/vec2f(res.xy)));
+
+		let res_pos = (floor(vec2f(id.xy)/vec2f(px)) + 0.5) * vec2f(px);
+
+		var total_influence: f32 = 0.0;
 		for (var i = 0u; i < metaball_count; i = i + 1u) {
 
-			let clip_space_pos = proj * view * vec4f(metaball_pos[i], 1.0);
+			let pos = metaball_pos[i].xy;
 
-			let screen_pos = clip_to_screen(clip_space_pos);
+			let len2 = point_length2(res_pos, pos);
+			let r = metaball_radius[i];
+			let r2 = r*r;
 
-			let dist = distance(vec3f(id.xy), screen_pos.xy);
-
-			let influence = max(0.0, 1.0 - dist / metaball_radius[i]);
-
-			final_color += metaball_color[i] * influence;
-
+			total_influence += r2/len2;
 		}
 
-		final_color = saturate(final_color);
+
+		let alpha = step(1.0, total_influence);
+		let final_color = vec3f(0.0, 1.0, 0.0)*alpha;
 		
-		textureStore(framebuffer, id.xy, vec4f(final_color, 1.0));
+		textureStore(framebuffer, id.xy, vec4f(final_color, alpha));
 	}
 }

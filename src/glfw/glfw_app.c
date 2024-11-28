@@ -44,7 +44,7 @@ init_glfw_app(glfw_app_t *app,
                          render_func_names, render_func_count,
                          build_dir, "glfw_wgpu", "dll", 1);
         load_code(&app->render_code);
-        ASSERT_LOG(app->render_code.is_valid, "Error: Failed to load glfw_opengl.dll for %s", name);
+        ASSERT_LOG(app->render_code.is_valid, "Error: Failed to load glfw_wgpu.dll for %s", name);
     }
     
     // NOTE(ajeej): Create GLFW window

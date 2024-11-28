@@ -1,6 +1,5 @@
 
-
-#include <GLES3/gl3.h>
+#include <webgpu\webgpu.h>
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/key_codes.h>
@@ -17,16 +16,57 @@
 #include "entity.h"
 #include "app.h"
 #include "app_funcs.h"
+#include "ems_renderer.h"
 #include "ems_app.h"
 
 #include "load.c"
+#include "shape.c"
 #include "renderer.c"
 #include "assets.c"
 
-#include "shader.c"
-#include "opengl.c"
+//#include "shader.c"
+//#include "opengl.c"
 #include "app.c"
 #include "ems_app.c"
+
+
+typedef struct request_adapter_callback_data_t {
+    void *adapter;
+    b8 request_ended;
+} request_adapter_callback_data_t;
+
+typedef struct request_device_callback_data_t {
+    void *device;
+    b8 request_ended;
+} request_device_callback_data_t;
+
+void request_adapter_callback(u32 status, void *adapter,
+                              char const *message, void *user_data)
+{
+    request_adapter_callback_data_t *data = (request_adapter_callback_data_t *)user_data;
+    
+    if (status == 0) {
+        data->adapter = adapter;
+    } else {
+        LOG("Could not get WebGPU adapter: %s", message);
+    }
+    
+    data->request_ended = 1;
+}
+
+void request_device_callback(u32 status, void *device,
+                             char const *message, void *user_data)
+{
+    request_device_callback_data_t *data = (request_device_callback_data_t *)user_data;
+    
+    if (status == 0) {
+        data->device = device;
+    } else {
+        LOG("Could not get WebGPU device: %s", message);
+    }
+    
+    data->request_ended = 1;
+}
 
 
 const u32 TARGET_FPS = 60;
@@ -47,7 +87,7 @@ main_loop(void *arg) {
     f64 current_time = emscripten_get_now();
     f64 dt = current_time - last_time;
     
-    if (dt >= FRAME_DURATION) {
+    if (1 || dt >= FRAME_DURATION) {
         
         ems_app_t *app;
         app_t *plat_app;
@@ -57,18 +97,18 @@ main_loop(void *arg) {
             plat_app = &app->plat_app;
             
             // NOTE(ajeej): Make canvas context current
-            ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
-            emscripten_webgl_make_context_current(app->ctx);
+            //ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
+            //emscripten_webgl_make_context_current(app->ctx);
             
             // NOTE(ajeej): Start Frame
-            start_frame(&plat_app->rb);
+            app->render_funcs.start_frame(&plat_app->rb);
             
             // NOTE(ajeej): Update and Render
             ASSERT_LOG(app->funcs.update_and_render, "Error: update_and_render is invalid");
             app->funcs.update_and_render(plat_app);
             
             // NOTE(ajeej): End Frame
-            end_frame(&plat_app->rb);
+            app->render_funcs.end_frame(&plat_app->rb);
         }
         
     }
@@ -82,6 +122,7 @@ main(int argc, char **argv)
     
     u32 app_count = (argc-1)/2;
     char *build_dir = get_build_dir(argv[0]);
+    char data_dir[] = "./data/";
     
     ems_app_t *apps = malloc(sizeof(ems_app_t)*app_count);
     memset(apps, 0, sizeof(ems_app_t)*app_count);
@@ -98,17 +139,30 @@ main(int argc, char **argv)
         
         // NOTE(ajeej): Initialize EMS App
         init_ems_app(app, app_func_names, ARRAY_COUNT(app_func_names),
-                     build_dir, name, canvas);
+                     render_func_names, ARRAY_COUNT(render_func_names),
+                     build_dir, data_dir,
+                     name, canvas);
+        
+        LOG("Loading Assets");
+        
+        app->funcs.load_assets(&plat_app->am);
+        
+        LOG("Udating Assets");
+        
+        // NOTE(ajeej): Update assets
+        update_assets(&plat_app->am);
+        
+        LOG("Init app");
         
         // NOTE(ajeej): Intialize app
         app->funcs.init_app(plat_app);
         
-        // NOTE(ajeej): Update assets
-        update_assets(&plat_app->rb, &plat_app->am);
+        LOG("Init Renderer");
         
-        // NOTE(ajeej): Update renderer
-        update_renderer(&plat_app->rb);
-        
+        // NOTE(ajeej): Initialize renderer
+        app->render_funcs.init_renderer(app->canvas, &plat_app->rb, &plat_app->am,
+                                        request_adapter_callback,
+                                        request_device_callback);
         
         free((void *)canvas);
         free((void *)name);
