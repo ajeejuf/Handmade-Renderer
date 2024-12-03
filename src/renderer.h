@@ -121,6 +121,7 @@ typedef struct font_info_t {
     u32 start, count;
     
     f32 *xoff, *yoff, *xadvance;
+    f32 **kerning;
 } font_info_t;
 
 enum {
@@ -375,6 +376,11 @@ typedef struct bind_update_info_t {
     u32 b_id;
 } bind_update_info_t;
 
+typedef struct buffer_read_info_t {
+    void *data;
+    u32 id, size;
+} buffer_read_info_t;
+
 
 enum {
     PIPELINE_TYPE_RENDER,
@@ -462,10 +468,17 @@ typedef struct texture_copy_t {
     u32 width, height;
 } texture_copy_t;
 
+typedef struct buffer_copy_t {
+    u32 src, dst;
+    u32 src_offset, dst_offset;
+    u32 size;
+} buffer_copy_t;
+
 enum {
     GPU_CMD_RENDER_PIPELINE_SUBMIT,
     GPU_CMD_COMPUTE_PIPELINE_SUBMIT,
-    GPU_CMD_TEXTURE_COPY
+    GPU_CMD_TEXTURE_COPY,
+    GPU_CMD_BUFFER_COPY,
 };
 
 typedef struct gpu_cmd_t {
@@ -475,6 +488,8 @@ typedef struct gpu_cmd_t {
         render_pipeline_submit_t rp_submit;
         compute_pipeline_submit_t cp_submit;
         texture_copy_t tex_copy;
+        buffer_copy_t buf_copy;
+        
     } data;
 } gpu_cmd_t;
 
@@ -495,6 +510,7 @@ typedef struct renderer_t {
     
     STACK(gpu_cmd_t *) cmds;
     STACK(bind_update_info_t) *bind_updates;
+    STACK(buffer_read_info_t) *buffer_reads;
     
     STACK(vertex_t) *verts;
     STACK(u32) *indices;

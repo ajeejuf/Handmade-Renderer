@@ -501,6 +501,7 @@ create_buffer(wgpu_renderer_t *wgpu, u64 size, u32 usage)
     buffer_desc.nextInChain = NULL;
     buffer_desc.size = size;
     buffer_desc.usage = get_wgpu_buffer_usage(usage);
+    
     buffer_desc.mappedAtCreation = 0;
     
     buffer = wgpuDeviceCreateBuffer(wgpu->device, &buffer_desc);
@@ -761,7 +762,7 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
             
             b_layout->offset = b_offsets[b_layout->buffer_id];
             b_layout->stride = align_offset(b_layout->size, alignment);
-            b_layout->aligned_size = align_offset(b_layout->size, 16);
+            b_layout->aligned_size = (b_layout->size <= 4) ? align_offset(b_layout->size, 4) : align_offset(b_layout->size, 16);
             
             if (b_layout->has_dynamic_offset)
                 b_offsets[b_layout->buffer_id] = b_layout->offset + b_layout->stride*b_layout->count;
@@ -770,8 +771,10 @@ process_bind_group_layouts(wgpu_renderer_t *wgpu, bind_group_layout_t *layouts, 
         }
     }
     
-    for (u32 b_idx = 0; b_idx < b_count; b_idx++)
-        b_info[b_idx].size = b_offsets[b_idx];
+    for (u32 b_idx = 0; b_idx < b_count; b_idx++) {
+        if (b_offsets[b_idx] != 0)
+            b_info[b_idx].size = b_offsets[b_idx];
+    }
     
     free(b_offsets);;
 }
@@ -798,7 +801,7 @@ write_buffer_bind_layout(wgpu_renderer_t *wgpu, buffer_bind_layout_t binding)
                                  binding.offset + stride*i,
                                  data, binding.size);
             
-            if (binding.size != stride)
+            /*if (binding.size != stride)
             {
                 u8 *d = malloc(stride-binding.size);
                 memset(d, 0, stride-binding.size);
@@ -808,7 +811,7 @@ write_buffer_bind_layout(wgpu_renderer_t *wgpu, buffer_bind_layout_t binding)
                                      data, stride - binding.size);
                 
                 free(d);
-            }
+            }*/
             
             data += binding.size;
         }
@@ -865,6 +868,26 @@ update_bind_layout_data(renderer_t *rb, wgpu_renderer_t *wgpu, bind_update_info_
                 continue;//ASSERT_LOG(0, "Invalid binding type for writing data");
             } break;
         }
+    }
+}
+
+
+
+internal void
+read_buffer_data(wgpu_renderer_t *wgpu, buffer_read_info_t *infos, u32 count)
+{
+    buffer_read_info_t info;
+    for (u32 i = 0; i < count; i++)
+    {
+        info = infos[i];
+        
+        /*buffer_map_callback_data_t *callback_data = malloc(sizeof(buffer_map_callback_data_t));
+        
+        callback_data->buffer = wgpu->buffers[info.id];
+        callback_data->data = info.data;
+        callback_data->size = info.size;
+        
+        wgpuBufferMapAsync(wgpu->buffers[info.id], WGPUMapMode_Read, 0, info.size, buffer_map_callback, callback_data);*/
     }
 }
 
@@ -1062,6 +1085,19 @@ submit_texture_copy(wgpu_renderer_t *wgpu,
     wgpuCommandEncoderCopyTextureToTexture(wgpu->encoder,
                                            &src_tex, &dst_tex, &copy_size);
 }
+
+internal void
+submit_buffer_copy(wgpu_renderer_t *wgpu, 
+                   u32 src, u32 src_offset,
+                   u32 dst, u32 dst_offset,
+                   u32 size)
+{
+    wgpuCommandEncoderCopyBufferToBuffer(wgpu->encoder,
+                                         wgpu->buffers[src], src_offset,
+                                         wgpu->buffers[dst], dst_offset, 
+                                         size);
+}
+
 
 internal void
 init_wgpu(wgpu_renderer_t *wgpu, 
@@ -1329,6 +1365,15 @@ end_wgpu_frame(renderer_t *rb, wgpu_renderer_t *wgpu)
                                     tex_copy.width, tex_copy.height);
             } break;
             
+            case GPU_CMD_BUFFER_COPY: {
+                buffer_copy_t buf_copy = gpu_cmd->data.buf_copy;
+                
+                submit_buffer_copy(wgpu, 
+                                   buf_copy.src, buf_copy.src_offset,
+                                   buf_copy.dst, buf_copy.dst_offset,
+                                   buf_copy.size);
+            } break;
+            
             default: {
                 ASSERT_LOG(0, "Invalid GPU command type.");
             } break;
@@ -1345,10 +1390,13 @@ end_wgpu_frame(renderer_t *rb, wgpu_renderer_t *wgpu)
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(wgpu->encoder, &cmd_buffer_desc);
     wgpuCommandEncoderRelease(wgpu->encoder);
     
-    LOG("Submitting command...");
+    //LOG("Submitting command...");
     wgpuQueueSubmit(wgpu->queue, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
-    LOG("Command submitted.");
+    //LOG("Command submitted.");
+    
+    read_buffer_data(wgpu, rb->buffer_reads, get_stack_count(rb->buffer_reads));
+    stack_clear(rb->buffer_reads);
     
 #if __EMSCRIPTEN__
     emscripten_sleep(10);

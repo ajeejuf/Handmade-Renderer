@@ -47,37 +47,19 @@ global metaballs_t metaballs;
 
 global u32 fb_quad;
 
-global u32 render_debug_circles = 0;
+global u32 render_debug_circles = 1;
 global u32 render_grid = 0;
 global u32 pause_balls = 0;
-global u32 draw_balls = 1;
+global u32 draw_balls = 0;
 
 
 global renderer_t *global_rb = NULL;
 
 
 
-void set_pause_0(void *args) {
-    u32 *pause = (u32 *)args;
-    
-    pause_balls = *pause;
-}
-
-
 GET_CALLBACKS(get_callbacks)
 {
-    callback_info_t *info = malloc(sizeof(*info)*1);
-    
-    
-    info[0] = get_callback_info("set_pause", strlen("set_pause"),
-                                TYPE_VOID, set_pause_0);
-    
-    
-    hashmap_create(2, *func_hash);
-    
-    ASSERT_LOG(!hashmap_put(*func_hash, "set_pause", strlen("set_pause"), info),
-               "Failed to hash %s function.", "set_pause");
-    
+    func_hash = NULL;
 }
 
 LOAD_ASSETS(load_assets)
@@ -117,7 +99,7 @@ INIT_APP(init_app)
     metaballs = create_metaballs(rb, pos, rad, vel, 10, 20, HMM_V3(1.0f, 0.5f, 0.0f), HMM_V3(1.0, 0.0, 0.0),
                                  rb->width, rb->height);
     
-    grid = create_screen_grid(rb, rb->width, rb->height, rb->width, rb->width, 1.0f);
+    grid = create_screen_grid(rb, rb->width, rb->height, 64, rb->width, 1.0f);
     
     fb_quad = create_quad(rb, HMM_V3(0.0f, 0.0f, 0.0f), HMM_V2(2.0f, 2.0f), HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
     

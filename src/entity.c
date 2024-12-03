@@ -125,7 +125,6 @@ render_text(app_t *app, u32 id, const char* str)
     char c;
     u32 c_idx, count = strlen(str);
     
-    
     font_info_t info = app->rb.fonts[text->font_id];
     mat4 *trans = app->rb.transforms + text->trans_id;
     
@@ -146,12 +145,22 @@ render_text(app_t *app, u32 id, const char* str)
         
         c_idx = c - info.start;
         
-        update_transform(trans, 
-                         HMM_AddV3(pos, HMM_V3(info.xoff[c_idx]*size, info.yoff[c_idx]*size, 0.0f)), 
-                         HMM_V3(0.0f, 0.0f, 0.0f),
-                         HMM_V3(size/2, size/2, 1.0f));
+        f32 kern = 0.0;
+        if (i < count-1)
+        {
+            u32 nc_idx = str[i+1]-info.start;
+            kern = info.kerning[c_idx][nc_idx];
+        }
         
-        pos = HMM_AddV3(pos, HMM_V3(info.xadvance[c_idx]*size, 0.0f, 0.0f));
+        update_transform(trans, 
+                         HMM_AddV3(pos, 
+                                   HMM_V3(info.xoff[c_idx]*size, 
+                                          info.yoff[c_idx]*size, 
+                                          0.0f)),
+                         HMM_V3(0.0f, 0.0f, 0.0f),
+                         HMM_V3(size, size, 1.0f));
+        
+        pos = HMM_AddV3(pos, HMM_V3((info.xadvance[c_idx]+kern)*size, 0.0f, 0.0f));
         
         push_render_cmd(&app->rb, info.mesh_start_id + c_idx, 0, text->trans_id + i, 1);
         

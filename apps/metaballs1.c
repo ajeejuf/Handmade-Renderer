@@ -22,8 +22,6 @@
 
 u32 c_ids[3];
 
-u32 res_bind_id;
-
 u32 font_asset_id;
 u32 font_id;
 u32 text_shader_id;
@@ -47,37 +45,65 @@ global metaballs_t metaballs;
 
 global u32 fb_quad;
 
-global u32 render_debug_circles = 0;
-global u32 render_grid = 0;
+global u32 render_debug_circles = 1;
+global u32 render_grid = 1;
 global u32 pause_balls = 0;
 global u32 draw_balls = 1;
 
+global u32 res_bind_id;
+global u32 grid_trans_bg_id;
 
 global renderer_t *global_rb = NULL;
 
+callback_info_t callback_infos[4];
 
+void set_res_4(void *args) {
+    u32 *res = (u32 *)args;
+    
+    update_screen_grid(&grid, *res);
+    update_bind_group_layout(global_rb, res_bind_id, 0);
+    update_bind_group_layout(global_rb, grid_trans_bg_id, 0);
+}
 
-void set_pause_0(void *args) {
+void set_debug_circles_4(void *args) {
+    u32 *debug = (u32 *)args;
+    
+    render_debug_circles = *debug;
+}
+
+void set_grid_4(void *args) {
+    u32 *use_grid = (u32 *)args;
+    
+    render_grid = *use_grid;
+}
+
+void set_pause_4(void *args) {
     u32 *pause = (u32 *)args;
     
     pause_balls = *pause;
 }
 
-
 GET_CALLBACKS(get_callbacks)
 {
-    callback_info_t *info = malloc(sizeof(*info)*1);
-    
-    
-    info[0] = get_callback_info("set_pause", strlen("set_pause"),
-                                TYPE_VOID, set_pause_0);
-    
+    callback_infos[0] = get_callback_info("set_res", strlen("set_res"),
+                                          TYPE_VOID, set_res_4);
+    callback_infos[1] = get_callback_info("set_debug_circles", strlen("set_debug_circles"),
+                                          TYPE_VOID, set_debug_circles_4);
+    callback_infos[2] = get_callback_info("set_grid", strlen("set_grid"),
+                                          TYPE_VOID, set_grid_4);
+    callback_infos[3] = get_callback_info("set_pause", strlen("set_pause"),
+                                          TYPE_VOID, set_pause_4);
     
     hashmap_create(2, *func_hash);
     
-    ASSERT_LOG(!hashmap_put(*func_hash, "set_pause", strlen("set_pause"), info),
+    ASSERT_LOG(!hashmap_put(*func_hash, "set_res", strlen("set_res"), callback_infos),
+               "Failed to hash %s function.", "set_res");
+    ASSERT_LOG(!hashmap_put(*func_hash, "set_debug_circles", strlen("set_debug_circles"), callback_infos+1),
+               "Failed to hash %s function.", "set_debug_circles");
+    ASSERT_LOG(!hashmap_put(*func_hash, "set_grid", strlen("set_grid"), callback_infos+2),
+               "Failed to hash %s function.", "set_grid");
+    ASSERT_LOG(!hashmap_put(*func_hash, "set_pause", strlen("set_pause"), callback_infos+3),
                "Failed to hash %s function.", "set_pause");
-    
 }
 
 LOAD_ASSETS(load_assets)
@@ -117,7 +143,7 @@ INIT_APP(init_app)
     metaballs = create_metaballs(rb, pos, rad, vel, 10, 20, HMM_V3(1.0f, 0.5f, 0.0f), HMM_V3(1.0, 0.0, 0.0),
                                  rb->width, rb->height);
     
-    grid = create_screen_grid(rb, rb->width, rb->height, rb->width, rb->width, 1.0f);
+    grid = create_screen_grid(rb, rb->width, rb->height, 64, rb->width, 1.0f);
     
     fb_quad = create_quad(rb, HMM_V3(0.0f, 0.0f, 0.0f), HMM_V2(2.0f, 2.0f), HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
     
@@ -207,6 +233,7 @@ INIT_APP(init_app)
     add_bind_layouts(rb, g_ids[0], g_layout, 1);
     add_bind_layouts(rb, g_ids[1], g_layout+1, 2);
     
+    grid_trans_bg_id = g_ids[0];
     
     m_layout[0] = get_storage_texture_bind_layout(0, SHADER_VISIBILITY_COMPUTE, fb_tex, TEXTURE_ACCESS_WRITEONLY);
     m_layout[1] = get_buffer_bind_layout(grid.res, 0, SHADER_VISIBILITY_COMPUTE, ub_ids[0], BUFFER_TYPE_UNIFORM,
@@ -308,7 +335,7 @@ UPDATE_AND_RENDER(update_and_render)
         // NOTE(ajeej): Write grid
         start_render_pipeline(rb, p_id[1]);
         {
-            //render_screen_grid(rb, grid);
+            render_screen_grid(rb, grid);
         }
         end_render_pipeline(rb);
     }

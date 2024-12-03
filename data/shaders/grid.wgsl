@@ -14,10 +14,13 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<storage, read> models: array<mat4x4f>;
 
+@group(1) @binding(0) var<uniform> view: mat4x4f;
+@group(1) @binding(1) var<uniform> proj: mat4x4f;
+
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	out.pos =models[in.inst_idx]*vec4f(in.pos, 1.0);
+	out.pos = proj*view*models[in.inst_idx]*vec4f(in.pos, 1.0);
 	return out;
 }
 

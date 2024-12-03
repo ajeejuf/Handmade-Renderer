@@ -26,21 +26,14 @@ fn cs_main(@builtin(global_invocation_id) id: vec3<u32>)
 		for (var i: u32 = 0; i < metaball_count; i++) {
 			let pos = metaball_pos[i].xy;
 
-			let thickness = 2.0;
-			let smoothness = 1.0;
-
-			let len2 = point_length2(px_pos, pos);
+			let len = sqrt(point_length2(px_pos, pos));
 			let r = metaball_radius[i];
+			let dist = r-len;
 
-			let r_outer2 = (r + smoothness) * (r + smoothness);
-			let r_inner2 = (r - smoothness) * (r - smoothness);
-			let r_thick_outer2 = (r - thickness + smoothness) * (r - thickness + smoothness);
-			let r_thick_inner2 = (r - thickness - smoothness) * (r - thickness - smoothness);
+			let thickness = 4.0;
+			let smoothness = 2.0;
 
-			let outer = smoothstep(r_outer2, r_inner2, len2);
-			let inner = smoothstep(r_thick_outer2, r_thick_inner2, len2);
-
-			let alpha = outer*(1.0 - inner);
+			let alpha = smoothstep(0.0, smoothness, dist)*smoothstep(thickness+smoothness, thickness, dist);
 
 			final_alpha = max(final_alpha, alpha);
 			

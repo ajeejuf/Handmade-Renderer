@@ -271,9 +271,14 @@ process_font_asset(renderer_t *rb, asset_manager_t *am, u32 asset_id)
     info->xoff = (f32 *)malloc(sizeof(f32)*asset.ch_count);
     info->yoff = (f32 *)malloc(sizeof(f32)*asset.ch_count);
     info->xadvance = (f32 *)malloc(sizeof(f32)*asset.ch_count);
+    info->kerning = (f32 **)malloc(sizeof(f32 *)*asset.ch_count);
+    f32 *kern_data = malloc(sizeof(f32)*asset.ch_count*asset.ch_count);
     
     stbtt_packedchar *packed_chs = asset.packed_chs;
     stbtt_aligned_quad *aligned_quads = asset.aligned_quads;
+    u32 **kerning = (u32 **)asset.kerning;
+    
+    f32 scale = 2.0f / rb->height;
     
     v2 glyph_size, center, uvs[4];
     stbtt_packedchar packed_ch;
@@ -285,6 +290,7 @@ process_font_asset(renderer_t *rb, asset_manager_t *am, u32 asset_id)
         
         glyph_size = HMM_V2(packed_ch.x1 - packed_ch.x0,
                             packed_ch.y1 - packed_ch.y0);
+        glyph_size = HMM_MulV2F(glyph_size, scale);
         
         uvs[0] = HMM_V2(aligned_quad.s0, aligned_quad.t1);
         uvs[1] = HMM_V2(aligned_quad.s1, aligned_quad.t1);
@@ -292,12 +298,16 @@ process_font_asset(renderer_t *rb, asset_manager_t *am, u32 asset_id)
         uvs[3] = HMM_V2(aligned_quad.s0, aligned_quad.t0);
         
         center = HMM_DivV2F(glyph_size, 2.0f);
-        create_textured_quad(rb, HMM_V3(center.X, -center.Y, 0.0f), glyph_size, uvs, 
+        create_textured_quad(rb, HMM_V3(center.X, center.Y, 0.0f), glyph_size, uvs, 
                              HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
         
-        info->xoff[i] = packed_ch.xoff;
-        info->yoff[i] = packed_ch.yoff + glyph_size.Y;
-        info->xadvance[i] = packed_ch.xadvance;
+        info->xoff[i] = packed_ch.xoff*scale*2;
+        info->yoff[i] = packed_ch.yoff*scale*2 + glyph_size.Y;
+        info->xadvance[i] = packed_ch.xadvance*scale*2;
+        
+        info->kerning[i] = kern_data + i*asset.ch_count;
+        for (u32 j = 0; j < asset.ch_count; j++)
+            kerning[i][j] = (f32)kerning[i][j]*scale*2;
     }
     
     return id;
@@ -532,13 +542,13 @@ add_vertex_buffer(renderer_t *rb,
 }
 
 internal u32
-add_buffer(renderer_t *rb, u32 usage)
+add_buffer(renderer_t *rb, u32 usage, u32 size)
 {
     u32 id = get_stack_count(rb->buffers);
     
     buffer_info_t *info = (buffer_info_t *)stack_push(&rb->buffers);
     
-    info->size = 0;
+    info->size = size;
     info->usage = usage;
     
     return id;
@@ -685,6 +695,15 @@ update_bind_group_layout(renderer_t *rb, u32 bg_id, u32 b_id)
 }
 
 internal void
+read_buffer(renderer_t *rb, void *data, u32 b_id, u32 size)
+{
+    buffer_read_info_t *info = (buffer_read_info_t *)stack_push(&rb->buffer_reads);
+    info->data = data;
+    info->id = b_id;
+    info->size = size;
+}
+
+internal void
 use_render_pipeline(renderer_t *rb, u32 p_id)
 {
     rb->cur_pipeline = p_id;
@@ -742,7 +761,7 @@ end_render_pipeline(renderer_t *rb)
 }
 
 internal void
-copy_texture(renderer_t *rb, 
+copy_texture(renderer_t *rb,
              u32 src, u32 src_offset_x, u32 src_offset_y,
              u32 dst, u32 dst_offset_x, u32 dst_offset_y,
              u32 width, u32 height)
@@ -759,3 +778,20 @@ copy_texture(renderer_t *rb,
     
     add_gpu_cmd(rb, GPU_CMD_TEXTURE_COPY, &tex_copy);
 }
+
+internal void
+copy_buffer(renderer_t *rb, 
+            u32 src, u32 src_offset,
+            u32 dst, u32 dst_offset,
+            u32 size)
+{
+    buffer_copy_t buf_copy = {0};
+    buf_copy.src = src;
+    buf_copy.dst = dst;
+    buf_copy.src_offset = src_offset;
+    buf_copy.dst_offset = dst_offset;
+    buf_copy.size = size;
+    
+    add_gpu_cmd(rb, GPU_CMD_BUFFER_COPY, &buf_copy);
+}
+

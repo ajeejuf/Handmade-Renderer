@@ -28,7 +28,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	let color = textureSample(input, tex_sampler, in.uv);
 
 	let distance: f32 = color.a;
-	let alpha: f32 = smoothstep(1.0-0.1, 1.0+0.1, distance); 
+	let alpha: f32 = smoothstep(1.0-0.2, 1.0+0.2, distance); 
 
 	
 	return vec4f(mix(vec3f(0.0, 0.2, 0.5), color.rgb, pow(alpha, 0.1)), 1.0);

@@ -61,6 +61,12 @@ typedef struct request_device_callback_data_t {
     b8 request_ended;
 } request_device_callback_data_t;
 
+typedef struct buffer_map_callback_data_t {
+    WGPUBuffer buffer;
+    void *data;
+    u32 size;
+} buffer_map_callback_data_t;
+
 #if __EMSCRIPTEN__
 
 internal void
@@ -112,6 +118,25 @@ void request_device_callback(WGPURequestDeviceStatus status, WGPUDevice device,
     data->request_ended = 1;
 }
 
+void buffer_map_callback(WGPUMapAsyncStatus status, void *user_data)
+{
+    buffer_map_callback_data_t *info = (buffer_map_callback_data_t *)user_data;
+    
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        
+        void const *data = wgpuBufferGetConstMappedRange(info->buffer,
+                                                         0, info->size);
+        
+        if (data) {
+            memcpy(info->data, data, info->size);
+            
+            free(info);
+        }
+        
+        wgpuBufferUnmap(info->buffer);
+    }
+}
+
 internal void
 device_lost_callback(WGPUDevice const *device, WGPUDeviceLostReason reason, char const *message, void *user_data)
 {
@@ -149,6 +174,11 @@ request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const *options,
         emscripten_sleep(200);
     }
 #endif
+    
+    while(!rac_data.request_ended)
+    {
+        ;
+    }
     
     ASSERT_LOG(rac_data.request_ended, "Failed to acquire adapter!");
     
