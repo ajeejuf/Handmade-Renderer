@@ -10,6 +10,7 @@
 #include "assets.h"
 #include "entity.h"
 #include "app.h"
+#include "callback.h"
 #include "app_funcs.h"
 
 #include "shape.c"
@@ -45,7 +46,6 @@ global u32 s_id;
 global u32 s_f_id;
 
 global u32 bg_ids[7];
-
 
 
 internal void
@@ -109,8 +109,8 @@ create_uniforms(renderer_t *rb)
 {
     // NOTE(ajeej): Configure uniforms
     u32 ub_ids[2];
-    ub_ids[0] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_UNIFORM);
-    ub_ids[1] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_UNIFORM);
+    ub_ids[0] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_UNIFORM, 0);
+    ub_ids[1] = add_buffer(rb, BUFFER_FLAG_COPY_DST | BUFFER_FLAG_UNIFORM, 0);
     
     bind_layout_t meta_df_layouts[1];
     bind_layout_t g_blur_layouts[2];
@@ -294,6 +294,13 @@ clamp_entity_to_screen(app_t *app, u32 id)
 }
 
 
+
+
+GET_CALLBACKS(get_callbacks)
+{
+    func_hash = NULL;
+}
+
 LOAD_ASSETS(load_assets)
 {
     s_df_id = add_shader(am, "metaball_distance_field.wgsl", COMPUTE_SHADER);
@@ -364,6 +371,7 @@ UPDATE_AND_RENDER(update_and_render)
     submit_compute_pipeline(rb, c_ids[0]);
     submit_compute_pipeline(rb, c_ids[1]);
     submit_compute_pipeline(rb, c_ids[2]);
+    
     
     start_render_pipeline(rb, p_id[0]);
     {

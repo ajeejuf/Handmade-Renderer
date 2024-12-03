@@ -24,10 +24,6 @@ init_glfw_wgpu(wgpu_renderer_t *wgpu, GLFWwindow *window)
     WGPUInstanceDescriptor desc = {0};
     desc.nextInChain = NULL;
     
-#if __EMSCRIPTEN__
-    WGPUInstance instance = wgpuCreateInstance(NULL);
-#else
-    
     WGPUDawnTogglesDescriptor toggles;
     toggles.chain.next = NULL;
     toggles.chain.sType = WGPUSType_DawnTogglesDescriptor;
@@ -39,7 +35,6 @@ init_glfw_wgpu(wgpu_renderer_t *wgpu, GLFWwindow *window)
     desc.nextInChain = &toggles.chain;
     
     WGPUInstance instance = wgpuCreateInstance(&desc);
-#endif
     
     ASSERT_LOG(instance, "Could not initialize WebGPU!");
     

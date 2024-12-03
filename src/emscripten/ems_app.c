@@ -88,6 +88,18 @@ init_ems_app(ems_app_t *app,
         ASSERT_LOG(app->code.is_valid, "Error: Failed to load %s.wasm", name);
     }
     
+    struct hashmap_s *func_hash = stack_push(&func_hashes);
+    app->funcs.get_callbacks(&func_hash);
+    
+    if (func_hash) {
+        char **mod_name = stack_push(&mod_names);
+        *mod_name = cstr_dup((char *)canvas);
+        ASSERT_LOG(!hashmap_put(mod_hash, *mod_name, strlen(canvas), func_hash),
+                   "Failed to hash %s module.", canvas);
+    }
+    else
+        stack_pop(func_hashes);
+    
     // NOTE(ajeej): Load render code
     {
         init_loaded_code(&app->render_code, (void **)&app->render_funcs,
@@ -102,14 +114,6 @@ init_ems_app(ems_app_t *app,
         const char *temp[2] = { "#", canvas };
         full_canvas = cstr_make((const char **)temp, 2);
         LOG("CANVAS: %s", full_canvas);
-        /*EmscriptenWebGLContextAttributes attribs = {0};
-        emscripten_webgl_init_context_attributes(&attribs);
-        attribs.majorVersion = 2;
-        
-        app->ctx = emscripten_webgl_create_context(full_canvas, &attribs);
-        
-        ASSERT_LOG(app->ctx > 0, "Error: invalid WebGL context %lu", app->ctx);
-        emscripten_webgl_make_context_current(app->ctx);*/
     }
     
     // NOTE(ajeej): Init Plat App

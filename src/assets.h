@@ -44,6 +44,7 @@ typedef struct font_asset_t {
     u32 ch_start, ch_count;
     stbtt_packedchar *packed_chs;
     stbtt_aligned_quad *aligned_quads;
+    i32 **kerning;
 } font_asset_t;
 
 typedef struct asset_manager_t {

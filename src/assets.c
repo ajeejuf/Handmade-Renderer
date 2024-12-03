@@ -79,6 +79,14 @@ load_font_asset(char *data_dir, font_entry_t entry)
     memset(packed_chs, 0, sizeof(*packed_chs)*entry.ch_count);
     memset(aligned_quads, 0, sizeof(*aligned_quads)*entry.ch_count);
     
+    i32 *kern_data = (i32 *)malloc(sizeof(i32)*entry.ch_count*entry.ch_count);
+    i32 **kerning = (i32 **)malloc(sizeof(i32 *)*entry.ch_count);
+    for (u32 i = 0; i < entry.ch_count; i++)
+    {
+        kerning[i] = kern_data;
+        kern_data += entry.ch_count;
+    }
+    
     char path[MAX_PATH];
     path[0] = 0;
     
@@ -89,6 +97,9 @@ load_font_asset(char *data_dir, font_entry_t entry)
     if (font_count == -1)
         ASSERT_LOG(0, "The font file %s does not correspond to valid font data", entry.fn);
     
+    stbtt_fontinfo font_info;
+    stbtt_InitFont(&font_info, font_data, stbtt_GetFontOffsetForIndex(font_data, 0));
+    
     stbtt_pack_context ctx = {0};
     
     stbtt_PackBegin(&ctx,
@@ -97,7 +108,7 @@ load_font_asset(char *data_dir, font_entry_t entry)
                     entry.atlas_h,
                     0, 1, NULL);
     
-    //stbtt_PackSetOversampling(&ctx, 4, 4);
+    stbtt_PackSetOversampling(&ctx, 2, 2);
     
     stbtt_PackFontRange(&ctx,
                         font_data,
@@ -120,13 +131,23 @@ load_font_asset(char *data_dir, font_entry_t entry)
                             0);
     }
     
+    
+    for (u32 i = 0; i < entry.ch_count; i++)
+    {
+        for (u32 j = 0; j < entry.ch_count; j++)
+        {
+            char prev_c = entry.ch_start + i;
+            char cur_c = entry.ch_start + j;
+            kerning[i][j] = stbtt_GetCodepointKernAdvance(&font_info, prev_c, cur_c);
+        }
+    }
+    
     // NOTE(ajeej): test if it worked by outputting atlas
-    stbi_write_png("testAtlas.png", 
+    /*stbi_write_png("testAtlas.png", 
                    entry.atlas_w, entry.atlas_h,
                    1,
                    atlas_bitmap,
-                   entry.atlas_w);
-    
+                   entry.atlas_w);*/
     
     asset.atlas_bitmap = atlas_bitmap;
     asset.atlas_w = entry.atlas_w;
@@ -135,43 +156,8 @@ load_font_asset(char *data_dir, font_entry_t entry)
     asset.ch_count = entry.ch_count;
     asset.packed_chs = packed_chs;
     asset.aligned_quads = aligned_quads;
+    asset.kerning = kerning;
     
-    
-    /*u32 mesh_start_id = get_stack_count(rb->meshes);
-    f32 *xoff = (f32 *)malloc(entry.ch_count*sizeof(*xoff));
-    f32 *yoff = (f32*)malloc(entry.ch_count*sizeof(*yoff));
-    f32 *xadvance = (f32 *)malloc(entry.ch_count*sizeof(*xadvance));
-    
-    v2 glyph_size, center, uvs[4];
-    stbtt_packedchar *packed_ch;
-    stbtt_aligned_quad *aligned_quad;
-    for (u32 i = 0; i < entry.ch_count; i++)
-    {
-        packed_ch = packed_chs + i;
-        aligned_quad = aligned_quads + i;
-        
-        glyph_size = HMM_V2(packed_ch->x1 - packed_ch->x0,
-                            packed_ch->y1 - packed_ch->y0);
-        
-        uvs[0] = HMM_V2(aligned_quad->s1, aligned_quad->t0);
-        uvs[1] = HMM_V2(aligned_quad->s0, aligned_quad->t0);
-        uvs[2] = HMM_V2(aligned_quad->s0, aligned_quad->t1);
-        uvs[3] = HMM_V2(aligned_quad->s1, aligned_quad->t1);
-        
-        center = HMM_DivV2F(glyph_size, 2.0f);
-        create_textured_quad(rb, HMM_V3(center.X, center.Y, 0.0f),
-                             glyph_size, uvs, HMM_V4(1.0f, 1.0f, 1.0f, 1.0f));
-        
-        xoff[i] = packed_ch->xoff;
-        yoff[i] = packed_ch->yoff;
-        xadvance[i] = packed_ch->xadvance;
-    }
-    
-    add_font_info(rb, mesh_start_id, entry.ch_start, entry.ch_count,
-                  xoff, yoff, xadvance);
-    
-    free(packed_chs);
-    free(aligned_quads);*/
     free(font_data);
     
     return asset;

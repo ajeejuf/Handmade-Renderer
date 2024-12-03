@@ -21,6 +21,8 @@
 #include <stb_truetype.h>
 #include <stb_image_write.h>
 
+#include <hashmap.h>
+
 #define internal static
 #define global static
 #define local static
@@ -103,6 +105,9 @@ fprintf(stdout, "\n"); \
 
 #endif
 
+
+#define MAX(a, b) ((a) > (b)) ? (a) : (b)
+#define MIN(a, b) ((a) < (b)) ? (a) : (b)
 
 #define BYTES(x) (x)
 #define KILOBYTES(x) (x << 10)

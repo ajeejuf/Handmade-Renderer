@@ -15,6 +15,7 @@
 #include "assets.h"
 #include "entity.h"
 #include "app.h"
+#include "callback.h"
 #include "app_funcs.h"
 #include "ems_renderer.h"
 #include "ems_app.h"
@@ -27,6 +28,11 @@
 //#include "shader.c"
 //#include "opengl.c"
 #include "app.c"
+
+global STACK(char *) *mod_names = NULL;
+global STACK(struct hashmap_s) *func_hashes = NULL;
+global struct hashmap_s *mod_hash = NULL;
+
 #include "ems_app.c"
 
 
@@ -69,6 +75,24 @@ void request_device_callback(u32 status, void *device,
 }
 
 
+EMSCRIPTEN_KEEPALIVE
+void call_registered_function(const char *module, const char *func,
+                              void *return_value, void *args)
+{
+    LOG("module: %s, func: %s", module, func);
+    
+    struct hashmap_s *func_hash = (struct hashmap_s *)hashmap_get(mod_hash, module, strlen(module));
+    
+    ASSERT_LOG(func_hash, "Failed to get module");
+    
+    callback_info_t *callback = (callback_info_t *)hashmap_get(func_hash, func, strlen(func));
+    
+    ASSERT_LOG(callback, "Failed to get function");
+    
+    call_func_callback(callback, return_value, args);
+}
+
+
 const u32 TARGET_FPS = 60;
 const f64 FRAME_DURATION = 1000.0 / TARGET_FPS;
 global f64 last_time = 0;
@@ -87,8 +111,7 @@ main_loop(void *arg) {
     f64 current_time = emscripten_get_now();
     f64 dt = current_time - last_time;
     
-    if (1 || dt >= FRAME_DURATION) {
-        
+    if (dt >= FRAME_DURATION) {
         ems_app_t *app;
         app_t *plat_app;
         for (int i = 0; i < count; i++)
@@ -123,6 +146,11 @@ main(int argc, char **argv)
     u32 app_count = (argc-1)/2;
     char *build_dir = get_build_dir(argv[0]);
     char data_dir[] = "./data/";
+    
+    main_loop_arg_t data = {0};
+    
+    mod_hash = malloc(sizeof(*mod_hash));
+    hashmap_create(2, mod_hash);
     
     ems_app_t *apps = malloc(sizeof(ems_app_t)*app_count);
     memset(apps, 0, sizeof(ems_app_t)*app_count);
@@ -168,7 +196,6 @@ main(int argc, char **argv)
         free((void *)name);
     }
     
-    main_loop_arg_t data = {0};
     data.apps = apps;
     data.count = app_count;
     
